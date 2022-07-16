@@ -1,14 +1,11 @@
 import torch
 from bayesian_network.bayesian_network import Node, BayesianNetwork
 from bayesian_network.common.statistics import generate_random_probability_matrix
-from bayesian_network.inference_machines.factor_graph.factor_graph_2 import FactorGraph
-from bayesian_network.inference_machines.torch_naive_inference_machine import TorchNaiveInferenceMachine
 from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_machine_2 import \
     TorchSumProductAlgorithmInferenceMachine
 from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from bayesian_network.samplers.torch_sampler import TorchBayesianNetworkSampler
-from matplotlib import pyplot as plt
 
 device = torch.device('cpu')
 

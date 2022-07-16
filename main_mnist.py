@@ -1,35 +1,38 @@
-from typing import Callable
-
+import time
 import torch
 import torchvision as torchvision
 from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.statistics import generate_random_probability_matrix
-from bayesian_network.inference_machines.factor_graph.factor_graph_2 import FactorGraph
 from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_machine_2 import \
     TorchSumProductAlgorithmInferenceMachine
+from bayesian_network.interfaces import IInferenceMachine
+from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from torchvision.transforms import transforms
 import matplotlib.pyplot as plt
 
-num_observations = 10
+num_observations = 1000
 device = torch.device('cpu')
 
 # Prepare training data set
 selected_labels = [0, 1]
 
 mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
-data = torch.stack([data for data, label in zip(mnist.train_data, mnist.train_labels) if label in selected_labels]) \
-    [0:num_observations].ge(128).int()
+selection = [(data, label) for data, label in zip(mnist.train_data, mnist.train_labels) if label in selected_labels] \
+    [0:num_observations]
+training_data = torch.stack([data for data, label in selection]) \
+    .ge(128).int()
+true_labels = [int(label) for data, label in selection]
 
-height, width = data.shape[1:3]
+height, width = training_data.shape[1:3]
 num_features = height * width
 
 # Morph into evidence structure
-evidence = data.reshape([num_observations, num_features])
+evidence = training_data.reshape([num_observations, num_features])
 
 # Create network
 Q = Node(generate_random_probability_matrix([len(selected_labels)], device), name='Q')
 Y_map = {
-    (iy, ix): Node(generate_random_probability_matrix([2, 2], device), name=f'Y_{iy}x{ix}')
+    (iy, ix): Node(generate_random_probability_matrix([len(selected_labels), 2], device), name=f'Y_{iy}x{ix}')
     for iy in range(height)
     for ix in range(width)
 }
@@ -41,39 +44,28 @@ parents[Q] = []
 network = BayesianNetwork(nodes, parents)
 
 # Train network
-num_iterations=8
+num_iterations = 5
 
-d = torch.zeros((num_iterations, num_features, num_observations, 2), dtype=torch.double)
-a1 = torch.zeros((num_iterations, num_features, num_observations, 2), dtype=torch.double)
+def inference_machine_factory(bayesian_network: BayesianNetwork) -> IInferenceMachine:
+    return TorchSumProductAlgorithmInferenceMachine(
+        bayesian_network=bayesian_network,
+        observed_nodes=Ys,
+        device=device,
+        num_iterations=8,
+        num_observations=num_observations,
+        callback=lambda x, y: None)
 
-def callback(factor_graph: FactorGraph, iteration: int):
-    d[iteration] = torch.stack([
-        variable_node.input_from_observation
-        for variable_node
-        in [factor_graph.variable_nodes[node] for node in Ys]
-    ])
-    a1[iteration] = torch.stack([
-        factor_node.input_from_local_variable_node
-        for factor_node
-        in [factor_graph.factor_nodes[node] for node in Ys]
-    ])
-    print(f'Finished iteration {iteration}/{num_iterations}')
+em_optimizer = EmOptimizer(network, inference_machine_factory)
+em_optimizer.optimize(evidence, num_iterations, lambda ll, iteration, duration:
+    print(f'Finished iteration {iteration}/{num_iterations} - ll: {ll} - it took: {duration} s'))
 
-sp_inference_machine = TorchSumProductAlgorithmInferenceMachine(
-    bayesian_network=network,
-    observed_nodes=Ys,
-    device=device,
-    num_iterations=num_iterations,
-    num_observations=num_observations,
-    callback=callback)
-
-sp_inference_machine.enter_evidence(evidence)
-ll = sp_inference_machine.log_likelihood()
-p = sp_inference_machine.infer_single_nodes([Q])
-p_family = sp_inference_machine.infer_nodes_with_parents(Ys)
+w = torch.stack([y.cpt for y in Ys])
 
 plt.figure()
-plt.plot(range(num_iterations), a1.reshape([num_iterations, -1]))
+for i in range(len(selected_labels)):
+    plt.subplot(1, len(selected_labels), i+1)
+    plt.imshow(w[:, i, 1].reshape(height, width))
+    plt.colorbar()
 
 
 pass
