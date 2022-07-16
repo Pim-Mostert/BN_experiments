@@ -1,4 +1,4 @@
-import time
+import matplotlib.pyplot as plt
 import torch
 import torchvision as torchvision
 from bayesian_network.bayesian_network import BayesianNetwork, Node
@@ -8,9 +8,8 @@ from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_m
 from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from torchvision.transforms import transforms
-import matplotlib.pyplot as plt
 
-num_observations = 1000
+num_observations = 200
 device = torch.device('cpu')
 
 # Prepare training data set
