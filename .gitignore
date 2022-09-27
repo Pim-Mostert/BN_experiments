@@ -242,3 +242,5 @@ fabric.properties
 
 # MNIST data
 **/MNIST/raw
+
+results.prof
