@@ -33,7 +33,7 @@ evidence = training_data.reshape([num_observations, num_features]).double()
 num_iterations = 10
 
 pi = torch.zeros(num_iterations, num_classes, dtype=torch.double)
-pi[0] = 0.5
+pi[0] = 1/num_classes
 
 mu = torch.zeros(num_iterations, num_classes, num_features, dtype=torch.double)
 mu[0] = torch.rand(num_classes, num_features)*0.2 + 0.4

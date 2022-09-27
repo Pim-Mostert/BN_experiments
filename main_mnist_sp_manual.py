@@ -11,11 +11,11 @@ from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from torchvision.transforms import transforms
 
-num_observations = 200
+num_observations = 1000
 device = torch.device('cpu')
 
 # Prepare training data set
-selected_labels = [0, 1]
+selected_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 num_classes = len(selected_labels)
 
 mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
@@ -32,7 +32,7 @@ num_features = height * width
 evidence = training_data.reshape([num_observations, num_features]).double()
 
 # Train model
-num_iterations = 7
+num_iterations = 5
 num_iterations_sp = 8
 
 pi = torch.zeros(num_iterations, num_classes, dtype=torch.double)
