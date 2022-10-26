@@ -11,8 +11,8 @@ from bayesian_network.common.torch_settings import TorchSettings
 from torchvision.transforms import transforms
 from torch.nn.functional import one_hot
 
-num_observations = 1000
-torch_settings = TorchSettings(torch.device('mps'), torch.float32)
+num_observations = 60000
+torch_settings = TorchSettings(torch.device('cpu'), torch.float64)
 
 # Prepare training data set
 selected_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
