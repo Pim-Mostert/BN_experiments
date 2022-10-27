@@ -1,8 +1,8 @@
-from azure.ai.ml import command
-from azure.ai.ml import Input, Output
+from pathlib import Path
 from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
-from azure.ai.ml import dsl
+from azure.ai.ml.dsl import pipeline
+from mldesigner import command_component, Input, Output
 
 credential = DefaultAzureCredential()
 
@@ -14,38 +14,32 @@ ml_client = MLClient(
     workspace_name="pim_azure_ml",
 )
 
-# Configuration
-compute_target = "cpu-cluster"
-job_environment = "AzureML-pytorch-1.9-ubuntu18.04-py37-cpu-inference:4"
-
 # Create command
-step_component = command(
-    name="test",
-    # display_name="Test met step.py",
-    # description="reads a .xl input, split the input to train and test",
-    inputs={
-        "name": Input(type="string"),
-        "output_file": Input(type="string"),
-    },
-    outputs={
-        "output_dir": Output(type="uri_folder", mode="rw_mount"),
-    },
-    # The source folder of the component
-    code="./azure_ml",
-    command="""python step.py --name ${{inputs.name}} --output_file ${{inputs.output_file}} --output_dir ${{outputs.output_dir}}""",
-    environment=job_environment,
-    compute=compute_target
+conda_env = dict(
+    # note that mldesigner package must be included.
+    conda_file=Path(__file__).parent / "conda.yaml",
+    image="mcr.microsoft.com/azureml/openmpi3.1.2-ubuntu18.04",
 )
 
-# Create pipeline
-@dsl.pipeline(
-    default_compute=compute_target,
+@command_component(
+    environment=conda_env
 )
+def step_component(
+    name: Input(type="string"),
+    output_file: Input(type="string"),
+    output_dir: Output(type="uri_folder"),
+):
+    print(f'Hoi {name}')
+    
+    with open(f'{output_dir}/{output_file}', "w") as file:
+        file.write(f'Groetjes van {name}')
+ 
+# Create pipeline
+@pipeline(default_compute="cpu-cluster")
 def step_pipeline(name):
     node = step_component(name=name, output_file="groetjes.txt")
 
 # Create job
-# step_job = step_component(name="Pim")
 pipeline_job = step_pipeline("Pim")
 
 # Submit the job
