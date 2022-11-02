@@ -1,4 +1,0 @@
-azure-ai-ml==1.0.0
-azure-identity==1.11.0
-mldesigner==0.1.0b8
-torch==1.12.1
