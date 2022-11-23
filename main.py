@@ -11,7 +11,7 @@ from bayesian_network.common.torch_settings import TorchSettings
 from torchvision.transforms import transforms
 from torch.nn.functional import one_hot
 
-num_observations = 60000
+num_observations = 2000
 torch_settings = TorchSettings(torch.device('cpu'), torch.float64)
 
 # Prepare training data set
