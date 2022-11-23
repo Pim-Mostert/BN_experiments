@@ -1,94 +1,86 @@
+import matplotlib.pyplot as plt
 import torch
-from bayesian_network.bayesian_network import Node, BayesianNetwork
+import torchvision as torchvision
+from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.statistics import generate_random_probability_matrix
-from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_machine_2 import \
+from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_machine import \
     TorchSumProductAlgorithmInferenceMachine
 from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
-from bayesian_network.samplers.torch_sampler import TorchBayesianNetworkSampler
+from bayesian_network.common.torch_settings import TorchSettings
+from torchvision.transforms import transforms
+from torch.nn.functional import one_hot
 
-device = torch.device('cpu')
-
-# True network
-Q_true = Node(torch.tensor([0.8, 0.2], device=device, dtype=torch.double), name='Q_true')
-Y1_true = Node(torch.tensor([[0, 1], [1, 0]], device=device, dtype=torch.double), name='Y1_true')
-Y2_true = Node(torch.tensor([[1, 0], [0, 1]], device=device, dtype=torch.double), name='Y2_true')
-nodes_true = [Q_true, Y1_true, Y2_true]
-parents_true = {
-    Q_true: [],
-    Y1_true: [Q_true],
-    Y2_true: [Q_true],
-}
-true_network = BayesianNetwork(nodes_true, parents_true)
+num_observations = 2000
+torch_settings = TorchSettings(torch.device('cpu'), torch.float64)
 
 # Prepare training data set
-num_observations = 1000
-sampler = TorchBayesianNetworkSampler(true_network, device=device)
-training_data = sampler.sample(num_observations, [Y1_true, Y2_true])
+selected_labels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+num_classes = len(selected_labels)
 
-# Create new network
-Q = Node(generate_random_probability_matrix((2), device=device), name='Q')
-Y1 = Node(generate_random_probability_matrix((2, 2), device=device), name='Y1')
-Y2 = Node(generate_random_probability_matrix((2, 2), device=device), name='Y2')
-nodes = [Q, Y1, Y2]
+mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
+selection = [(data, label) for data, label in zip(mnist.train_data, mnist.train_labels) if label in selected_labels] \
+    [0:num_observations]
+training_data = torch.stack([data for data, label in selection]) \
+    .ge(128).long()
+true_labels = [int(label) for data, label in selection]
+
+height, width = training_data.shape[1:3]
+num_features = height * width
+
+# Morph into evidence structure
+training_data_reshaped = training_data.reshape([num_observations, num_features])
+
+# evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
+gamma = 0.000001
+evidence = [
+    node_evidence * (1-gamma) + gamma/2
+    for node_evidence 
+    in one_hot(training_data_reshaped.T, 2).to(torch_settings.dtype)
+]
+
+# Create network
+Q = Node(torch.ones((num_classes), device=torch_settings.device, dtype=torch_settings.dtype)/num_classes, name='Q')
+mu = torch.rand((height, width, num_classes), device=torch_settings.device, dtype=torch_settings.dtype)*0.2 + 0.4
+mu = torch.stack([1-mu, mu], dim=3)
+Ys = [
+    Node(mu[iy, ix], name=f'Y_{iy}x{ix}')
+    for iy in range(height)
+    for ix in range(width)
+]
+
+nodes = [Q] + Ys
 parents = {
-    Q: [],
-    Y1: [Q],
-    Y2: [Q]
+    Y: [Q] for Y in Ys
 }
+parents[Q] = []
+
 network = BayesianNetwork(nodes, parents)
 
 # Train network
-num_iterations = 10
+num_iterations = 5
 
 def inference_machine_factory(bayesian_network: BayesianNetwork) -> IInferenceMachine:
     return TorchSumProductAlgorithmInferenceMachine(
         bayesian_network=bayesian_network,
-        observed_nodes=[Y1, Y2],
-        device=device,
-        num_iterations=5,
+        observed_nodes=Ys,
+        torch_settings=torch_settings,
+        num_iterations=8,
         num_observations=num_observations,
-        callback=lambda a, b: None)
+        callback=lambda x, y: None)
 
 em_optimizer = EmOptimizer(network, inference_machine_factory)
-em_optimizer.optimize(training_data, num_iterations, lambda ll, iteration: print(f'Finished iteration {iteration}/{num_iterations} - ll: {ll}'))
+em_optimizer.optimize(evidence, num_iterations, lambda ll, iteration, duration:
+    print(f'Finished iteration {iteration}/{num_iterations} - ll: {ll} - it took: {duration} s'))
+
+w = torch.stack([y.cpt.cpu() for y in Ys])
+
+plt.figure()
+for i in range(len(selected_labels)):
+    plt.subplot(4, 3, i+1)
+    plt.imshow(w[:, i, 1].reshape(height, width))
+    plt.colorbar()
+    plt.clim(0, 1)
+
 
 pass
-# num_iterations = 10
-#
-# d = torch.zeros((num_iterations, num_observations, 2), dtype=torch.double)
-# a1 = torch.zeros((num_iterations, num_observations, 2), dtype=torch.double)
-# b1 = torch.zeros((num_iterations, num_observations, 2), dtype=torch.double)
-# a2 = torch.zeros((num_iterations, num_observations, 2), dtype=torch.double)
-# b2 = torch.zeros((num_iterations, num_observations, 2), dtype=torch.double)
-# a3 = torch.zeros((num_iterations, num_observations, 2), dtype=torch.double)
-# b3 = torch.zeros((num_iterations, num_observations, 2), dtype=torch.double)
-# def callback(factor_graph: FactorGraph, iteration: int):
-#     d[iteration] = factor_graph.variable_nodes[Y].input_from_observation
-#     a1[iteration] = factor_graph.factor_nodes[Y].input_from_local_variable_node
-#     b1[iteration] = factor_graph.variable_nodes[Y].input_from_local_factor_node
-#     a2[iteration] = factor_graph.factor_nodes[Y].inputs_from_remote_variable_nodes[0]
-#     b2[iteration] = factor_graph.variable_nodes[Q].input_from_remote_factor_nodes[0]
-#     a3[iteration] = factor_graph.factor_nodes[Q].input_from_local_variable_node
-#     b3[iteration] = factor_graph.variable_nodes[Q].input_from_local_factor_node
-#     print(f'Finished iteration {iteration}/{num_iterations}')
-#
-# sp_inference_machine = TorchSumProductAlgorithmInferenceMachine(
-#     bayesian_network=network,
-#     observed_nodes=[Y],
-#     device=device,
-#     num_iterations=num_iterations,
-#     num_observations=num_observations,
-#     callback=callback)
-#
-# sp_inference_machine.enter_evidence(training_data)
-# ll = sp_inference_machine.log_likelihood()
-#
-# plt.figure()
-# plt.subplot(7, 1, 1); plt.plot(range(num_iterations), d.reshape([num_iterations, -1])); plt.title('d')
-# plt.subplot(7, 1, 2); plt.plot(range(num_iterations), a1.reshape([num_iterations, -1])); plt.title('a1')
-# plt.subplot(7, 1, 3); plt.plot(range(num_iterations), b1.reshape([num_iterations, -1])); plt.title('b1')
-# plt.subplot(7, 1, 4); plt.plot(range(num_iterations), a2.reshape([num_iterations, -1])); plt.title('a2')
-# plt.subplot(7, 1, 5); plt.plot(range(num_iterations), b2.reshape([num_iterations, -1])); plt.title('b2')
-# plt.subplot(7, 1, 6); plt.plot(range(num_iterations), a3.reshape([num_iterations, -1])); plt.title('a3')
-# plt.subplot(7, 1, 7); plt.plot(range(num_iterations), b3.reshape([num_iterations, -1])); plt.title('b3')
