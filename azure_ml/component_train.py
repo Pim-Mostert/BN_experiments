@@ -3,7 +3,6 @@ import torchvision
 from torchvision.transforms import transforms
 from torch.nn.functional import one_hot
 import pickle
-import logging
 
 env = dict(
     # note that mldesigner package must be included.
@@ -18,18 +17,12 @@ def preprocess_mnist_component(
     output_file: Output(type="uri_file"),
     data_dtype: Input(type="string", default="float64"),
 ):
-    print("hoi")
-    logging.info("hoi log")
-    
     mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
     # selection = [(data, label) for data, label in zip(mnist.train_data, mnist.train_labels) if label in selected_labels] \
     #     [0:num_observations]
     data = mnist.train_data.ge(128).long()
     labels = [int(label) for label in mnist.train_labels]
 
-    print("aa")
-    logging.info("aa log")
-    
     height, width = data.shape[1:3]
     num_features = height * width
     num_samples = data.shape[0]
@@ -37,9 +30,6 @@ def preprocess_mnist_component(
     # Morph into evidence structure
     training_data_reshaped = data.reshape([num_samples, num_features])
 
-    print("bb")
-    logging.info("bb log")
-    
     # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
     evidence = [
         node_evidence * (1-gamma) + gamma/2
@@ -47,10 +37,4 @@ def preprocess_mnist_component(
         in one_hot(training_data_reshaped.T, 2).to(data_dtype)
     ]
     
-    print("cc")
-    logging.info("cc log")
-       
     pickle.dump(evidence, output_file)
-    
-    print("done")
-    logging.info("done log")    

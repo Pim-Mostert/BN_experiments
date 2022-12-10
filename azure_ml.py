@@ -2,7 +2,7 @@ from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
 
 from app_config import config
-from azure_ml.pipeline_experiment import hoi_pipeline
+from azure_ml.pipeline_experiment import pipeline_experiment
 
 credential = DefaultAzureCredential()
 
@@ -17,7 +17,7 @@ ml_client = MLClient(
 )
 
 # Create job
-pipeline_job = hoi_pipeline("Klaasje")
+pipeline_job = pipeline_experiment(0.000001)
 
 # Submit the job
 submitted_job = ml_client.jobs.create_or_update(pipeline_job)
