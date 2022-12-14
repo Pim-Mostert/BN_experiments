@@ -4,13 +4,8 @@ from torchvision.transforms import transforms
 from torch.nn.functional import one_hot
 import pickle
 
-env = dict(
-    # note that mldesigner package must be included.
-    # conda_file=Path(__file__).parent / "conda.yaml",
-    image="mcr.microsoft.com/azureml/curated/acpt-pytorch-1.12-py39-cuda11.6-gpu:3",
-)
 @command_component(
-    environment="pim:2"
+    environment="azureml:pim:4"
 )
 def preprocess_mnist_component(
     gamma: Input(type="number"),    

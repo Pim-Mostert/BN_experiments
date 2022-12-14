@@ -6,11 +6,6 @@ import pickle
 import logging
 import torch
 
-# env = dict(
-#     # note that mldesigner package must be included.
-#     # conda_file=Path(__file__).parent / "conda.yaml",
-#     image="bd6edd4ab1f64cc6b843dd398eba3c02.azurecr.io/pim:2",
-# )
 @command_component(
     environment="azureml:pim:4"
 )
