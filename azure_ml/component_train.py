@@ -10,7 +10,7 @@ env = dict(
     image="mcr.microsoft.com/azureml/curated/acpt-pytorch-1.12-py39-cuda11.6-gpu:3",
 )
 @command_component(
-    environment=env
+    environment="pim:2"
 )
 def preprocess_mnist_component(
     gamma: Input(type="number"),    

@@ -4,22 +4,24 @@ from torchvision.transforms import transforms
 from torch.nn.functional import one_hot
 import pickle
 import logging
+import torch
 
-env = dict(
-    # note that mldesigner package must be included.
-    # conda_file=Path(__file__).parent / "conda.yaml",
-    image="mcr.microsoft.com/azureml/curated/acpt-pytorch-1.12-py39-cuda11.6-gpu:3",
-)
+# env = dict(
+#     # note that mldesigner package must be included.
+#     # conda_file=Path(__file__).parent / "conda.yaml",
+#     image="bd6edd4ab1f64cc6b843dd398eba3c02.azurecr.io/pim:2",
+# )
 @command_component(
-    environment=env
+    environment="azureml:pim:4"
 )
 def preprocess_mnist_component(
     gamma: Input(type="number"),    
-    output_file: Output(type="uri_file"),
-    data_dtype: Input(type="string", default="float64"),
+    output_file: Output(type="uri_file")
 ):
     print("hoi")
     logging.info("hoi log")
+    
+    print(f'torch.has_cuda: {torch.cuda.is_available()}')
     
     mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
     # selection = [(data, label) for data, label in zip(mnist.train_data, mnist.train_labels) if label in selected_labels] \
@@ -44,13 +46,14 @@ def preprocess_mnist_component(
     evidence = [
         node_evidence * (1-gamma) + gamma/2
         for node_evidence 
-        in one_hot(training_data_reshaped.T, 2).to(data_dtype)
+        in one_hot(training_data_reshaped.T, 2).to(torch.float64)
     ]
     
     print("cc")
     logging.info("cc log")
        
-    pickle.dump(evidence, output_file)
+    with open(output_file, 'wb') as file:
+        pickle.dump(evidence, file)
     
     print("done")
     logging.info("done log")    
