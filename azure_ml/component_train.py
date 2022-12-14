@@ -1,35 +1,72 @@
 from mldesigner import command_component, Input, Output
-import torchvision
-from torchvision.transforms import transforms
-from torch.nn.functional import one_hot
+from bayesian_network.bayesian_network import BayesianNetwork, Node
+from bayesian_network.common.torch_settings import TorchSettings
+import torch
 import pickle
+import matplotlib.pyplot as plt
+import torch
+import torchvision as torchvision
+from bayesian_network.bayesian_network import BayesianNetwork, Node
+from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_machine import \
+    TorchSumProductAlgorithmInferenceMachine
+from bayesian_network.interfaces import IInferenceMachine
+from bayesian_network.optimizers.em_optimizer import EmOptimizer
+from bayesian_network.common.torch_settings import TorchSettings
+
 
 @command_component(
     environment="azureml:pim:4"
 )
-def preprocess_mnist_component(
-    gamma: Input(type="number"),    
+def component_train(
+    evidence_file: Input(type="uri_file"),    
     output_file: Output(type="uri_file"),
-    data_dtype: Input(type="string", default="float64"),
 ):
-    mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
-    # selection = [(data, label) for data, label in zip(mnist.train_data, mnist.train_labels) if label in selected_labels] \
-    #     [0:num_observations]
-    data = mnist.train_data.ge(128).long()
-    labels = [int(label) for label in mnist.train_labels]
+    # Read evidence
+    with open(evidence_file, 'rb') as file:
+        evidence = pickle.load(file)
 
-    height, width = data.shape[1:3]
-    num_features = height * width
-    num_samples = data.shape[0]
+    height = 28
+    width = 28
+    num_classes = evidence[0].shape[1]
+    num_observations = evidence[0].shape[0]
 
-    # Morph into evidence structure
-    training_data_reshaped = data.reshape([num_samples, num_features])
-
-    # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
-    evidence = [
-        node_evidence * (1-gamma) + gamma/2
-        for node_evidence 
-        in one_hot(training_data_reshaped.T, 2).to(data_dtype)
-    ]
+    # Torch settings
+    torch_settings = TorchSettings(torch.device('cuda'), torch.float64)
     
-    pickle.dump(evidence, output_file)
+    # Create network
+    Q = Node(torch.ones((num_classes), device=torch_settings.device, dtype=torch_settings.dtype)/num_classes, name='Q')
+    mu = torch.rand((height, width, num_classes), device=torch_settings.device, dtype=torch_settings.dtype)*0.2 + 0.4
+    mu = torch.stack([1-mu, mu], dim=3)
+    Ys = [
+        Node(mu[iy, ix], name=f'Y_{iy}x{ix}')
+        for iy in range(height)
+        for ix in range(width)
+    ]
+
+    nodes = [Q] + Ys
+    parents = {
+        Y: [Q] for Y in Ys
+    }
+    parents[Q] = []
+
+    network = BayesianNetwork(nodes, parents)
+
+    # Train network
+    num_iterations = 10
+
+    def inference_machine_factory(bayesian_network: BayesianNetwork) -> IInferenceMachine:
+        return TorchSumProductAlgorithmInferenceMachine(
+            bayesian_network=bayesian_network,
+            observed_nodes=Ys,
+            torch_settings=torch_settings,
+            num_iterations=8,
+            num_observations=num_observations,
+            callback=lambda x, y: None)
+
+    em_optimizer = EmOptimizer(network, inference_machine_factory)
+    em_optimizer.optimize(evidence, num_iterations, lambda ll, iteration, duration:
+        print(f'Finished iteration {iteration}/{num_iterations} - ll: {ll} - it took: {duration} s'))
+
+    with open(output_file, 'wb') as file:
+        pickle.dump(network, file)
+
