@@ -53,15 +53,16 @@ def component_train(
 
     # Train network
     num_iterations = 10
+    num_sp_iterations = 8
 
     def inference_machine_factory(bayesian_network: BayesianNetwork) -> IInferenceMachine:
         return TorchSumProductAlgorithmInferenceMachine(
             bayesian_network=bayesian_network,
             observed_nodes=Ys,
             torch_settings=torch_settings,
-            num_iterations=8,
+            num_iterations=num_sp_iterations,
             num_observations=num_observations,
-            callback=lambda x, y: None)
+            callback=lambda factor_graph, iteration: print(f'Finished SP iteration {iteration}/{num_sp_iterations}'))
 
     em_optimizer = EmOptimizer(network, inference_machine_factory)
     em_optimizer.optimize(evidence, num_iterations, lambda ll, iteration, duration:
