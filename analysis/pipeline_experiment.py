@@ -1,8 +1,6 @@
-import pickle
-from typing import Dict
 from azure.ai.ml.dsl import pipeline
-from azure_ml.component_preprocess_mnist import preprocess_mnist_component
-from azure_ml.component_train import component_train
+from analysis.preprocess_mnist.component_preprocess_mnist import preprocess_mnist_component
+from analysis.train.component_train import component_train
 
 # Create pipeline
 @pipeline()
