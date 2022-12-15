@@ -1,8 +1,10 @@
-from mldesigner import command_component, Input, Output
+import torchvision
+from torchvision.transforms import transforms
+from torch.nn.functional import one_hot
+import torch
 from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.torch_settings import TorchSettings
 import torch
-import pickle
 import torch
 import torchvision as torchvision
 from bayesian_network.bayesian_network import BayesianNetwork, Node
@@ -12,22 +14,26 @@ from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from bayesian_network.common.torch_settings import TorchSettings
 
-@command_component(
-    environment="azureml:pim:4"
-)
-def component_train(
-    evidence_file: Input(type="uri_file"),    
-    output_file: Output(type="uri_file") = None,
-):
-    # Read evidence
-    with open(evidence_file, 'rb') as file:
-        evidence = pickle.load(file)
+def analysis():
+    mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
+    data = mnist.train_data.ge(128).long()
 
-    height = 28
-    width = 28
+    height, width = data.shape[1:3]
+    num_features = height * width
+    num_observations = data.shape[0]
     num_classes = 10
-    num_observations = evidence[0].shape[0]
 
+    # Morph into evidence structure
+    training_data_reshaped = data.reshape([num_observations, num_features])
+
+    # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
+    gamma = 0.000001
+    evidence = [
+        node_evidence * (1-gamma) + gamma/2
+        for node_evidence 
+        in one_hot(training_data_reshaped.T, 2).to(torch.float64)
+    ]
+            
     # Torch settings
     torch_settings = TorchSettings(torch.device('cpu'), torch.float64)
     
@@ -65,7 +71,6 @@ def component_train(
     em_optimizer = EmOptimizer(network, inference_machine_factory)
     em_optimizer.optimize(evidence, num_iterations, lambda ll, iteration, duration:
         print(f'Finished iteration {iteration}/{num_iterations} - ll: {ll} - it took: {duration} s'))
-
-    with open(output_file, 'wb') as file:
-        pickle.dump(network, file)
-
+        
+    return network
+    

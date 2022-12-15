@@ -1,9 +1,8 @@
-import json
 from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
+from analysis.azure_ml_pipeline import aml_pipeline
 
 from app_config import config
-from analysis.pipeline_experiment import pipeline_experiment
 
 credential = DefaultAzureCredential()
 
@@ -18,18 +17,12 @@ ml_client = MLClient(
 )
 
 # Create job
-preprocess_options = {
-    "gamma": 0.000001,
-}
-
-pipeline_job = pipeline_experiment(
-    preprocess_options_serialized=json.dumps(preprocess_options)
-);
+pipeline_job = aml_pipeline();
 
 # Submit the job
 submitted_job = ml_client.jobs.create_or_update(
     job=pipeline_job,
-    description="hoi",
+    description="Single wrapper component",
     compute="gpu-cluster")
 
 pass
