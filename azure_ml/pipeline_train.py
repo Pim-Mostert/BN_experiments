@@ -1,15 +1,12 @@
 from azure.ai.ml.dsl import pipeline
-from azure_ml.component_preprocess_mnist import preprocess_mnist_component
 from azure_ml.component_train import component_train
+from azure.ai.ml import Input
 
 # Create pipeline
-@pipeline(
-    default_compute="gpu-cluster"
-)
-def pipeline_train(evidence_file: str):
-    train = component_train(evidence_file=evidence_file)
+@pipeline()
+def pipeline_train():
+    path = 'azureml:Evidence_MNIST:1'
+    evidence_file = Input(type="uri_file", path=path)
     
-    return {
-        "bayesian_network_output_file": train.outputs.output_file
-    }
+    train = component_train(evidence_file=evidence_file)
 

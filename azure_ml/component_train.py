@@ -11,13 +11,13 @@ from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_m
 from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from bayesian_network.common.torch_settings import TorchSettings
-
+from azure.ai.ml.constants import AssetTypes
 
 @command_component(
     environment="azureml:pim:4"
 )
 def component_train(
-    evidence_file: Input(type="uri_file"),    
+    evidence_file: Input(type="uri_file"),
     output_file: Output(type="uri_file"),
 ):
     # Read evidence
