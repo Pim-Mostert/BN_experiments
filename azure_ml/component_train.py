@@ -3,7 +3,6 @@ from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.torch_settings import TorchSettings
 import torch
 import pickle
-import matplotlib.pyplot as plt
 import torch
 import torchvision as torchvision
 from bayesian_network.bayesian_network import BayesianNetwork, Node
@@ -27,11 +26,11 @@ def component_train(
 
     height = 28
     width = 28
-    num_classes = evidence[0].shape[1]
+    num_classes = 10
     num_observations = evidence[0].shape[0]
 
     # Torch settings
-    torch_settings = TorchSettings(torch.device('cuda'), torch.float64)
+    torch_settings = TorchSettings(torch.device('cpu'), torch.float64)
     
     # Create network
     Q = Node(torch.ones((num_classes), device=torch_settings.device, dtype=torch_settings.dtype)/num_classes, name='Q')
