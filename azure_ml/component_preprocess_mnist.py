@@ -29,6 +29,5 @@ def preprocess_mnist_component(
         in one_hot(training_data_reshaped.T, 2).to(torch.float64)
     ]
     
-    # Save to store
     with open(output_file, 'wb') as file:
         pickle.dump(evidence, file)

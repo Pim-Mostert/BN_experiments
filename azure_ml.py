@@ -2,7 +2,7 @@ from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
 
 from app_config import config
-from azure_ml.pipeline_preprocess_mnist import pipeline_preprocess_mnist
+from azure_ml.pipeline_experiment import pipeline_experiment
 
 credential = DefaultAzureCredential()
 
@@ -17,9 +17,9 @@ ml_client = MLClient(
 )
 
 # Create job
-pipeline_job = pipeline_preprocess_mnist(0.000001)
+pipeline_job = pipeline_experiment(0.000001)
 
 # Submit the job
-submitted_job = ml_client.jobs.create_or_update(pipeline_job, compute="gpu-cluster")
+submitted_job = ml_client.jobs.create_or_update(pipeline_job)
 
 pass
