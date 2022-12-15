@@ -3,7 +3,7 @@ from azure.identity import DefaultAzureCredential
 from azure.ai.ml.entities import Environment
 
 from app_config import config
-from azure_ml.pipeline_experiment import pipeline_experiment
+from azure_ml.pipeline_train import pipeline_experiment
 
 credential = DefaultAzureCredential()
 

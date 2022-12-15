@@ -32,5 +32,3 @@ def preprocess_mnist_component(
     # Save to store
     with open(output_file, 'wb') as file:
         pickle.dump(evidence, file)
-        
-    # Publish as data asset

@@ -6,10 +6,8 @@ from azure_ml.component_train import component_train
 @pipeline(
     default_compute="gpu-cluster"
 )
-def pipeline_experiment(gamma: float):
-    preprocess = preprocess_mnist_component(gamma=gamma)
-    
-    train = component_train(evidence_file=preprocess.outputs.output_file)
+def pipeline_train(evidence_file: str):
+    train = component_train(evidence_file=evidence_file)
     
     return {
         "bayesian_network_output_file": train.outputs.output_file

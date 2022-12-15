@@ -20,6 +20,6 @@ ml_client = MLClient(
 pipeline_job = pipeline_preprocess_mnist(0.000001)
 
 # Submit the job
-submitted_job = ml_client.jobs.create_or_update(pipeline_job)
+submitted_job = ml_client.jobs.create_or_update(pipeline_job, compute="gpu-cluster")
 
 pass
