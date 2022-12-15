@@ -12,13 +12,12 @@ from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from bayesian_network.common.torch_settings import TorchSettings
 
-
 @command_component(
     environment="azureml:pim:4"
 )
 def component_train(
     evidence_file: Input(type="uri_file"),    
-    output_file: Output(type="uri_file"),
+    output_file: Output(type="uri_file") = None,
 ):
     # Read evidence
     with open(evidence_file, 'rb') as file:
