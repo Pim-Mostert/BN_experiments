@@ -13,7 +13,7 @@ ml_client = MLClient(
 )
 
 # Create job
-pipeline_job = aml_pipeline();
+pipeline_job = aml_pipeline("cpu");
 
 # Submit the job
 submitted_job = ml_client.jobs.create_or_update(
