@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib; matplotlib.interactive(True)
 import torch
-from analysis.analysis import analysis
+from analysis import analysis
 
 network = analysis()
 

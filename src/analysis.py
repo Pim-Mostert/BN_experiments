@@ -1,7 +1,5 @@
-import torchvision
-from torchvision.transforms import transforms
-from torch.nn.functional import one_hot
 import torch
+from preprocess import preprocess
 from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.torch_settings import TorchSettings
 import torch
@@ -15,29 +13,14 @@ from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from bayesian_network.common.torch_settings import TorchSettings
 
 def analysis(torch_device: torch.device = torch.device("cpu")):
-    mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
-    data = mnist.train_data.ge(128).long()
+    # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
+    evidence = preprocess()
 
-    height, width = data.shape[1:3]
-    num_features = height * width
-    num_observations = data.shape[0]
+    num_observations = evidence[0].shape[0]
+    height = 28
+    width = 28
     num_classes = 10
 
-    # Morph into evidence structure
-    training_data_reshaped = data.reshape([num_observations, num_features])
-    
-    # Make smaller selection
-    training_data_reshaped = training_data_reshaped[:10000]
-    num_observations = training_data_reshaped.shape[0]
-
-    # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
-    gamma = 0.000001
-    evidence = [
-        node_evidence * (1-gamma) + gamma/2
-        for node_evidence 
-        in one_hot(training_data_reshaped.T, 2).to(torch.float64)
-    ]
-            
     # Torch settings
     torch_settings = TorchSettings(torch_device, torch.float64)
     

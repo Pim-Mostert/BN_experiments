@@ -1,4 +1,4 @@
-from analysis import analysis
+import analysis
 from mldesigner import command_component, Output
 import pickle
 import torch
