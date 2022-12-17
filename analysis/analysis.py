@@ -14,7 +14,7 @@ from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from bayesian_network.common.torch_settings import TorchSettings
 
-def analysis():
+def analysis(torch_device: torch.device = torch.device("cpu")):
     mnist = torchvision.datasets.MNIST('./mnist', train=True, transform=transforms.ToTensor(), download=True)
     data = mnist.train_data.ge(128).long()
 
@@ -25,6 +25,10 @@ def analysis():
 
     # Morph into evidence structure
     training_data_reshaped = data.reshape([num_observations, num_features])
+    
+    # Make smaller selection
+    training_data_reshaped = training_data_reshaped[:10000]
+    num_observations = training_data_reshaped.shape[0]
 
     # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
     gamma = 0.000001
@@ -35,7 +39,7 @@ def analysis():
     ]
             
     # Torch settings
-    torch_settings = TorchSettings(torch.device('cpu'), torch.float64)
+    torch_settings = TorchSettings(torch_device, torch.float64)
     
     # Create network
     Q = Node(torch.ones((num_classes), device=torch_settings.device, dtype=torch_settings.dtype)/num_classes, name='Q')

@@ -1,28 +1,23 @@
-from azure.ai.ml import MLClient
-from azure.identity import DefaultAzureCredential
-from analysis.azure_ml_pipeline import aml_pipeline
+import matplotlib.pyplot as plt
+import matplotlib; matplotlib.interactive(True)
+import torch
+from analysis.analysis import analysis
 
-from app_config import config
+network = analysis()
 
-credential = DefaultAzureCredential()
+height = 28
+width = 28
 
-# Get a handle to the workspace
-azure_ml_config = config.azure_ml
+Q = network.nodes[0]
+Ys = network.nodes[1:]
 
-ml_client = MLClient(
-    credential=credential,
-    subscription_id=azure_ml_config.subscription_id,
-    resource_group_name=azure_ml_config.resource_group_name,
-    workspace_name=azure_ml_config.workspace_name,
-)
+w = torch.stack([y.cpt.cpu() for y in Ys])
 
-# Create job
-pipeline_job = aml_pipeline();
-
-# Submit the job
-submitted_job = ml_client.jobs.create_or_update(
-    job=pipeline_job,
-    description="Single wrapper component",
-    compute="gpu-cluster")
+plt.figure()
+for i in range(0, 10):
+    plt.subplot(4, 3, i+1)
+    plt.imshow(w[:, i, 1].reshape(height, width))
+    plt.colorbar()
+    plt.clim(0, 1)
 
 pass
