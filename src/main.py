@@ -3,7 +3,7 @@ import matplotlib; matplotlib.interactive(True)
 import torch
 from analysis import analysis
 
-network = analysis()
+network = analysis(torch.device("cpu"), torch.float64)
 
 height = 28
 width = 28

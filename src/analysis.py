@@ -1,8 +1,6 @@
-import torch
 from preprocess import preprocess
 from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.torch_settings import TorchSettings
-import torch
 import torch
 import torchvision as torchvision
 from bayesian_network.bayesian_network import BayesianNetwork, Node
@@ -12,18 +10,25 @@ from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
 from bayesian_network.common.torch_settings import TorchSettings
 
-def analysis(torch_device: torch.device = torch.device("cpu")):
+def analysis(
+    torch_device: torch.device = torch.device("cpu"),
+    dtype: torch.dtype = torch.float64
+):
+    torch_settings = TorchSettings(torch_device, dtype)
+
     # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
-    evidence = preprocess()
+    evidence = preprocess(
+        gamma=0.000001,
+        selected_num_observations=2000,
+        torch_device=torch_settings.device,
+        dtype=torch_settings.dtype,
+    )
 
     num_observations = evidence[0].shape[0]
     height = 28
     width = 28
     num_classes = 10
 
-    # Torch settings
-    torch_settings = TorchSettings(torch_device, torch.float64)
-    
     # Create network
     Q = Node(torch.ones((num_classes), device=torch_settings.device, dtype=torch_settings.dtype)/num_classes, name='Q')
     mu = torch.rand((height, width, num_classes), device=torch_settings.device, dtype=torch_settings.dtype)*0.2 + 0.4
