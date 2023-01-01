@@ -234,5 +234,6 @@ crashlytics.properties
 crashlytics-build.properties
 fabric.properties
 
-# MNIST data
+#### Added by Pim
 **/MNIST/raw
+azure_ml_downloads

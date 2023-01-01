@@ -19,7 +19,6 @@ def analysis(
     # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
     evidence = preprocess(
         gamma=0.000001,
-        selected_num_observations=2000,
         torch_device=torch_settings.device,
         dtype=torch_settings.dtype,
     )

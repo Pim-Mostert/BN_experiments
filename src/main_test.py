@@ -1,11 +1,9 @@
 import matplotlib.pyplot as plt
 import matplotlib; matplotlib.interactive(True)
-
-from azure_ml import submit_job
 import torch
+from analysis import analysis
 
-job_name = submit_job()
-
+network = analysis(torch.device("cpu"), torch.float64)
 
 height = 28
 width = 28
