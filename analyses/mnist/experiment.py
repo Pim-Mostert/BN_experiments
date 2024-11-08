@@ -148,12 +148,3 @@ def experiment(torch_settings=None, selected_num_observations=None):
     network = fit(torch_settings, evidence)
 
     return network
-
-
-# %%
-
-if __name__ == "__main__":
-    torch_settings = TorchSettings(torch.device("cpu"), torch.float64)
-    selected_num_observations = 1000
-
-    experiment(torch_settings, selected_num_observations)

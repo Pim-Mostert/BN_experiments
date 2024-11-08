@@ -11,5 +11,5 @@ if __name__ == "__main__":
 
     flow.from_source(
         source=github_repo,
-        entrypoint="analyses/mnist/main.py:experiment",
-    ).serve(name="experiment", limit=10)
+        entrypoint="prefect/main.py:main",
+    ).serve(name="main")

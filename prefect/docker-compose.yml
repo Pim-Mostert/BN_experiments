@@ -1,9 +1,14 @@
 version: '3.8'
 
 services:
-  serve:
+  prefect-serve:
     build:
       context: .
       dockerfile: Dockerfile
     volumes:
       - ./prefect:/prefect # Mounts the current directory to /app in the container
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
