@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  serve:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./prefect:/prefect # Mounts the current directory to /app in the container

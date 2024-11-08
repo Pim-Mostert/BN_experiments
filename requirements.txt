@@ -4,3 +4,4 @@ bayesian-network==0.0.2
 ipykernel==6.29.5
 matplotlib==3.9.2
 prefect==3.0.11
+prefect[docker]==0.6.1

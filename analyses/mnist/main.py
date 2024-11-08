@@ -94,7 +94,7 @@ def fit(torch_settings, evidence):
     network = BayesianNetwork(nodes, parents)
 
     # Fit network
-    num_iterations = 30
+    num_iterations = 12
     num_sp_iterations = 3
 
     def inference_machine_factory(
