@@ -5,8 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - ./prefect:/prefect # Mounts the current directory to /app in the container
+    # volumes:
+    #   - ./prefect:/prefect # Mounts the current directory to /app in the container
     deploy:
       resources:
         limits:
