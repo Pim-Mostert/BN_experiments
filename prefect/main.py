@@ -13,10 +13,22 @@ async def main():
     torch_settings = TorchSettings(torch.device("cpu"), torch.float64)
 
     await asyncio.gather(
-        experiment(torch_settings, selected_num_observations=1000),
-        experiment(torch_settings, selected_num_observations=2000),
-        experiment(torch_settings, selected_num_observations=3000),
-        experiment(torch_settings, selected_num_observations=4000),
-        experiment(torch_settings, selected_num_observations=5000),
-        experiment(torch_settings, selected_num_observations=6000),
+        asyncio.run(
+            experiment(torch_settings, selected_num_observations=1000)
+        ),
+        asyncio.run(
+            experiment(torch_settings, selected_num_observations=2000)
+        ),
+        asyncio.run(
+            experiment(torch_settings, selected_num_observations=3000)
+        ),
+        asyncio.run(
+            experiment(torch_settings, selected_num_observations=4000)
+        ),
+        asyncio.run(
+            experiment(torch_settings, selected_num_observations=5000)
+        ),
+        asyncio.run(
+            experiment(torch_settings, selected_num_observations=6000)
+        ),
     )
