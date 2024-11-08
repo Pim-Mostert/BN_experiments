@@ -135,7 +135,7 @@ def fit(torch_settings, evidence):
 
 
 @flow(task_runner=ThreadPoolTaskRunner(max_workers=10))
-def experiment(torch_settings=None, selected_num_observations=None):
+async def experiment(torch_settings=None, selected_num_observations=None):
     if torch_settings is None:
         torch_settings = TorchSettings(torch.device("cpu"), torch.float64)
 
