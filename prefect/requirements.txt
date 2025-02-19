@@ -1,0 +1,4 @@
+torch==1.13.0
+torchvision==0.14.1
+bayesian-network==0.0.2
+matplotlib==3.9.2

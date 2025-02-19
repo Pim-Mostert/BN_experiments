@@ -236,4 +236,5 @@ fabric.properties
 
 #### Added by Pim
 **/MNIST/raw
-azure_ml_downloads
+.env
+**/prefect/storage
