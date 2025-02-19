@@ -8,7 +8,9 @@ services:
     # volumes:
     #   - ./prefect:/prefect # Mounts the current directory to /app in the container
     deploy:
+      mode: replicated
+      replicas: 4
       resources:
         limits:
           cpus: '4'
-          memory: 4G
+          memory: 6G

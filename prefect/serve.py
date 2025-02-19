@@ -12,4 +12,4 @@ if __name__ == "__main__":
     flow.from_source(
         source=github_repo,
         entrypoint="prefect/main.py:main",
-    ).serve(name="main")
+    ).serve(name="main", limit=1)
