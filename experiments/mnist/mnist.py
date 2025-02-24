@@ -1,26 +1,31 @@
 # %%
-from prefect import flow, get_run_logger, task
+
+import matplotlib.pyplot as plt
+import mlflow
 import torch
-from torch.nn.functional import one_hot
-from bayesian_network.common.torch_settings import TorchSettings
 import torchvision
-from torchvision.transforms import transforms
 from bayesian_network.bayesian_network import BayesianNetwork, Node
+from bayesian_network.common.torch_settings import TorchSettings
 from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_machine import (
     TorchSumProductAlgorithmInferenceMachine,
 )
 from bayesian_network.interfaces import IInferenceMachine
 from bayesian_network.optimizers.em_optimizer import EmOptimizer
-from prefect.artifacts import (
-    create_progress_artifact,
-    update_progress_artifact,
-)
-from prefect.task_runners import ThreadPoolTaskRunner
+from torch.nn.functional import one_hot
+from torchvision.transforms import transforms
+
+# %% tags=["parameters"]
+
+device = "cpu"
+selected_num_observations = 1000
+num_iterations = 10
+gamma = 0.00001
+
+torch_settings = TorchSettings(torch.device(device), torch.float64)
 
 # %%
 
 
-@task
 def preprocess(
     torch_settings: TorchSettings, gamma, selected_num_observations
 ):
@@ -54,8 +59,7 @@ def preprocess(
 # %%
 
 
-@task
-def fit(torch_settings, evidence):
+def fit(torch_settings, num_iterations, evidence):
     num_observations = evidence[0].shape[0]
     height = 28
     width = 28
@@ -94,7 +98,6 @@ def fit(torch_settings, evidence):
     network = BayesianNetwork(nodes, parents)
 
     # Fit network
-    num_iterations = 12
     num_sp_iterations = 3
 
     def inference_machine_factory(
@@ -109,21 +112,14 @@ def fit(torch_settings, evidence):
             callback=lambda *args: None,
         )
 
-    progress_artifact_id = create_progress_artifact(
-        progress=0.0,
-        description="EM Optimizer iterations",
-    )
-
-    logger = get_run_logger()
-
     def callback(ll, iteration, duration):
-        logger.info(
-            f"Finished iteration {iteration}/{num_iterations} - ll: {ll} - it took: {duration} s"
+        print(
+            f"Finished iteration {iteration}/{num_iterations}"
+            f" - ll: {ll} - it took: {duration} s"
         )
-        update_progress_artifact(
-            artifact_id=progress_artifact_id,
-            progress=((iteration + 1) / num_iterations) * 100,
-        )
+
+        mlflow.log_metric("iteration_duration", duration, iteration)
+        mlflow.log_metric("log_likelihood", ll, iteration)
 
     em_optimizer = EmOptimizer(network, inference_machine_factory)
     em_optimizer.optimize(evidence, num_iterations, callback)
@@ -134,17 +130,17 @@ def fit(torch_settings, evidence):
 # %%
 
 
-@flow(task_runner=ThreadPoolTaskRunner(max_workers=10))
-def experiment(torch_settings=None, selected_num_observations=None):
-    if torch_settings is None:
-        torch_settings = TorchSettings(torch.device("cpu"), torch.float64)
+evidence = preprocess(torch_settings, gamma, selected_num_observations)
+network = fit(torch_settings, num_iterations, evidence)
 
-    if selected_num_observations is None:
-        selected_num_observations = 1000
+# %%
 
-    gamma = 0.00001
+Ys = network.nodes[1:]
+w = torch.stack([y.cpt.cpu() for y in Ys])
 
-    evidence = preprocess(torch_settings, gamma, selected_num_observations)
-    network = fit(torch_settings, evidence)
-
-    return network
+plt.figure()
+for i in range(0, 10):
+    plt.subplot(4, 3, i + 1)
+    plt.imshow(w[:, i, 1].reshape(28, 28))
+    plt.colorbar()
+    plt.clim(0, 1)
