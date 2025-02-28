@@ -11,7 +11,7 @@ dag = create_experiment_dag(
     notebook_path,
     experiment_params={
         "name": Param(
-            default="Pim",
+            default="Pim & Klaas",
             type="string",
             description="Your name.",
         ),
