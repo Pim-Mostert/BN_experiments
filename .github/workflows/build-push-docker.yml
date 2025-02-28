@@ -32,6 +32,6 @@ jobs:
           build-args:
             AZURE_ARTIFACTS_TOKEN=${{ secrets.AZURE_ARTIFACTS_READWRITE_TOKEN }}
           tags: |
-            ghcr.io/bn_experiments_airflow:latest
-            ghcr.io/bn_experiments_airflow:sha-${{ github.sha }}
+            ghcr.io/pim-mostert/bn_experiments_airflow:latest
+            ghcr.io/pim-mostert/bn_experiments_airflow:sha-${{ github.sha }}
           
