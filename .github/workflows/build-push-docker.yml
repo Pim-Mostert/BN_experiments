@@ -24,14 +24,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Enable multi-platform build (https://docs.docker.com/build/ci/github-actions/multi-platform/)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          build-args:
-            AZURE_ARTIFACTS_TOKEN=${{ secrets.AZURE_ARTIFACTS_READWRITE_TOKEN }}
+          platforms: linux/arm64/v8 # Macbook Pro M1
+          build-args: AZURE_ARTIFACTS_TOKEN=${{ secrets.AZURE_ARTIFACTS_READWRITE_TOKEN }}
           tags: |
             ghcr.io/pim-mostert/bn_experiments_airflow:latest
             ghcr.io/pim-mostert/bn_experiments_airflow:sha-${{ github.sha }}
-          
