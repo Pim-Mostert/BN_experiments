@@ -19,8 +19,8 @@ from bayesian_network.optimizers.common import (
     OptimizerLogger,
 )
 from bayesian_network.optimizers.em_batch_optimizer import (
-    EmBatchOptimizer,
     EmBatchOptimizerSettings,
+    EmBatchOptimizer,
 )
 
 import logging
@@ -29,18 +29,23 @@ logging.basicConfig(level=logging.INFO)
 
 # %% tags=["parameters"]
 
-TORCH_SETTINGS = TorchSettings(
-    device="cpu",
-    dtype="float64",
-)
+DEVICE = "cpy"
+DTYPE = "float64"
 
-EM_BATCH_OPTIMIZER_SETTINGS = EmBatchOptimizerSettings(
-    num_iterations=10,
-    learning_rate=0.01,
-)
+NUM_ITERATIONS = 10
+LEARNING_RATE = 0.01
 
 SELECTED_NUM_OBSERVATIONS = 2000
 GAMMA = 0.001
+
+BATCH_SIZE = 50
+
+# %% Configuration
+
+TORCH_SETTINGS = TorchSettings(
+    device=DEVICE,
+    dtype=DTYPE,
+)
 
 # %% Load data
 mnist = torchvision.datasets.MNIST(
@@ -115,7 +120,12 @@ evaluator = OptimizationEvaluator(
     evidence=evidence,
 )
 
-batches = EvidenceBatches(evidence, 50)
+batches = EvidenceBatches(evidence, BATCH_SIZE)
+
+EM_BATCH_OPTIMIZER_SETTINGS = EmBatchOptimizerSettings(
+    num_iterations=NUM_ITERATIONS,
+    learning_rate=LEARNING_RATE,
+)
 
 em_optimizer = EmBatchOptimizer(
     bayesian_network=network,
