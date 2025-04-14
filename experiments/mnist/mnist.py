@@ -1,139 +1,141 @@
-# %%
-
+# %% Imports
 import matplotlib.pyplot as plt
-import mlflow
 import torch
 import torchvision
-from bayesian_network.bayesian_network import BayesianNetwork, Node
-from bayesian_network.common.torch_settings import TorchSettings
-from bayesian_network.inference_machines.torch_sum_product_algorithm_inference_machine import (
-    TorchSumProductAlgorithmInferenceMachine,
+
+
+from bayesian_network.inference_machines.spa_v3.spa_inference_machine import (
+    SpaInferenceMachine,
+    SpaInferenceMachineSettings,
 )
-from bayesian_network.interfaces import IInferenceMachine
-from bayesian_network.optimizers.em_optimizer import EmOptimizer
-from torch.nn.functional import one_hot
-from torchvision.transforms import transforms
+
+
+from bayesian_network.bayesian_network import BayesianNetwork, Node
+from bayesian_network.inference_machines.evidence import Evidence, EvidenceBatches
+from bayesian_network.common.torch_settings import TorchSettings
+from bayesian_network.optimizers.common import (
+    OptimizationEvaluator,
+    OptimizationEvalulatorSettings,
+    OptimizerLogger,
+)
+from bayesian_network.optimizers.em_batch_optimizer import (
+    EmBatchOptimizer,
+    EmBatchOptimizerSettings,
+)
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 # %% tags=["parameters"]
 
-device = "cpu"
-selected_num_observations = 1000
-num_iterations = 10
-gamma = 0.00001
+TORCH_SETTINGS = TorchSettings(
+    device="cpu",
+    dtype="float64",
+)
 
-torch_settings = TorchSettings(torch.device(device), torch.float64)
+EM_BATCH_OPTIMIZER_SETTINGS = EmBatchOptimizerSettings(
+    num_iterations=10,
+    learning_rate=0.01,
+)
 
-# %%
+SELECTED_NUM_OBSERVATIONS = 2000
+GAMMA = 0.001
 
+# %% Load data
+mnist = torchvision.datasets.MNIST(
+    "./experiments/mnist",
+    train=True,
+    download=True,
+)
+data = mnist.data / 255
 
-def preprocess(
-    torch_settings: TorchSettings, gamma, selected_num_observations
-):
-    mnist = torchvision.datasets.MNIST(
-        "./mnist", train=True, transform=transforms.ToTensor(), download=True
+height, width = data.shape[1:3]
+num_features = height * width
+num_observations = data.shape[0]
+
+# Morph into evidence structure
+data = data.reshape([num_observations, num_features])
+
+evidence = Evidence(
+    [torch.stack([1 - x, x]).T for x in data.T * (1 - GAMMA) + GAMMA / 2],
+    TORCH_SETTINGS,
+)
+
+# Make selection
+evidence = evidence[:SELECTED_NUM_OBSERVATIONS]
+
+# %% Define network
+num_classes = 10
+
+# Create network
+Q = Node(
+    torch.ones(
+        (num_classes),
+        device=TORCH_SETTINGS.device,
+        dtype=TORCH_SETTINGS.dtype,
     )
-    data = mnist.train_data.to(torch_settings.device)
-
-    # Make smaller selection
-    if selected_num_observations:
-        data = data[0:selected_num_observations, :, :]
-
-    data = data.ge(128).long()
-
-    height, width = data.shape[1:3]
-    num_features = height * width
-    num_observations = data.shape[0]
-
-    # Morph into evidence structure
-    data = data.reshape([num_observations, num_features])
-
-    # evidence: List[num_observed_nodes x torch.Tensor[num_observations x num_states]], one-hot encoded
-    evidence = [
-        node_evidence * (1 - gamma) + gamma / 2
-        for node_evidence in one_hot(data.T, 2).to(torch_settings.dtype)
-    ]
-
-    return evidence
-
-
-# %%
-
-
-def fit(torch_settings, num_iterations, evidence):
-    num_observations = evidence[0].shape[0]
-    height = 28
-    width = 28
-    num_classes = 10
-
-    # Create network
-    Q = Node(
-        torch.ones(
-            (num_classes),
-            device=torch_settings.device,
-            dtype=torch_settings.dtype,
-        )
-        / num_classes,
-        name="Q",
+    / num_classes,
+    name="Q",
+)
+mu = (
+    torch.rand(
+        (height, width, num_classes),
+        device=TORCH_SETTINGS.device,
+        dtype=TORCH_SETTINGS.dtype,
     )
-    mu = (
-        torch.rand(
-            (height, width, num_classes),
-            device=torch_settings.device,
-            dtype=torch_settings.dtype,
-        )
-        * 0.2
-        + 0.4
-    )
-    mu = torch.stack([1 - mu, mu], dim=3)
-    Ys = [
-        Node(mu[iy, ix], name=f"Y_{iy}x{ix}")
-        for iy in range(height)
-        for ix in range(width)
-    ]
+    * 0.2
+    + 0.4
+)
+mu = torch.stack([1 - mu, mu], dim=3)
+Ys = [Node(mu[iy, ix], name=f"Y_{iy}x{ix}") for iy in range(height) for ix in range(width)]
 
-    nodes = [Q] + Ys
-    parents = {Y: [Q] for Y in Ys}
-    parents[Q] = []
+nodes = [Q] + Ys
+parents = {Y: [Q] for Y in Ys}
+parents[Q] = []
 
-    network = BayesianNetwork(nodes, parents)
-
-    # Fit network
-    num_sp_iterations = 3
-
-    def inference_machine_factory(
-        bayesian_network: BayesianNetwork,
-    ) -> IInferenceMachine:
-        return TorchSumProductAlgorithmInferenceMachine(
-            bayesian_network=bayesian_network,
-            observed_nodes=Ys,
-            torch_settings=torch_settings,
-            num_iterations=num_sp_iterations,
-            num_observations=num_observations,
-            callback=lambda *args: None,
-        )
-
-    def callback(ll, iteration, duration):
-        print(
-            f"Finished iteration {iteration}/{num_iterations}"
-            f" - ll: {ll} - it took: {duration} s"
-        )
-
-        mlflow.log_metric("iteration_duration", duration, iteration)
-        mlflow.log_metric("log_likelihood", ll, iteration)
-
-    em_optimizer = EmOptimizer(network, inference_machine_factory)
-    em_optimizer.optimize(evidence, num_iterations, callback)
-
-    return network
+network = BayesianNetwork(nodes, parents)
 
 
-# %%
+# %% Fit network
+logger = OptimizerLogger()
 
+evaluator = OptimizationEvaluator(
+    OptimizationEvalulatorSettings(iteration_interval=1),
+    inference_machine_factory=lambda network: SpaInferenceMachine(
+        settings=SpaInferenceMachineSettings(
+            torch_settings=TORCH_SETTINGS,
+            num_iterations=3,
+            average_log_likelihood=False,
+        ),
+        bayesian_network=network,
+        observed_nodes=Ys,
+        num_observations=evidence.num_observations,
+    ),
+    evidence=evidence,
+)
 
-evidence = preprocess(torch_settings, gamma, selected_num_observations)
-network = fit(torch_settings, num_iterations, evidence)
+batches = EvidenceBatches(evidence, 50)
 
-# %%
+em_optimizer = EmBatchOptimizer(
+    bayesian_network=network,
+    inference_machine_factory=lambda network: SpaInferenceMachine(
+        settings=SpaInferenceMachineSettings(
+            torch_settings=TORCH_SETTINGS,
+            num_iterations=3,
+            average_log_likelihood=True,
+        ),
+        bayesian_network=network,
+        observed_nodes=Ys,
+        num_observations=batches.batch_size,
+    ),
+    settings=EM_BATCH_OPTIMIZER_SETTINGS,
+    logger=logger,
+    evaluator=evaluator,
+)
+em_optimizer.optimize(batches)
+
+# %% Plot
 
 Ys = network.nodes[1:]
 w = torch.stack([y.cpt.cpu() for y in Ys])
