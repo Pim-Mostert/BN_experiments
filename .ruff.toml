@@ -1,0 +1,4 @@
+exclude = [
+    "*.ipynb",
+]
+line-length = 100

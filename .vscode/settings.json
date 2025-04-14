@@ -1,0 +1,7 @@
+{
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "standard",
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "always"
+    },
+}
