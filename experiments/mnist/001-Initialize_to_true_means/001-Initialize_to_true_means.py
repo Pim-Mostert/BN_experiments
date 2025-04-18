@@ -13,9 +13,6 @@ from bayesian_network.inference_machines.spa_v3.spa_inference_machine import (
 
 from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.torch_settings import TorchSettings
-from bayesian_network.optimizers.common import (
-    OptimizerLogger,
-)
 from bayesian_network.optimizers.em_batch_optimizer import (
     EmBatchOptimizer,
     EmBatchOptimizerSettings,
@@ -23,7 +20,7 @@ from bayesian_network.optimizers.em_batch_optimizer import (
 
 import logging
 
-from experiments.mnist.evidence_batches import MnistEvidenceBatches
+from experiments.mnist.common import MLflowOptimizerLogger, MnistEvidenceBatches
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,11 +31,11 @@ TORCH_SETTINGS = TorchSettings(
     dtype="float64",
 )
 
-BATCH_SIZE = 2000
+BATCH_SIZE = 200
 
 EM_BATCH_OPTIMIZER_SETTINGS = EmBatchOptimizerSettings(
-    num_iterations=50,
-    learning_rate=0.2,
+    num_iterations=20,
+    learning_rate=0.05,
 )
 
 GAMMA = 0.001
@@ -109,7 +106,7 @@ network = BayesianNetwork(nodes, parents)
 
 
 # %% Fit network
-logger = OptimizerLogger()
+logger = MLflowOptimizerLogger()
 
 em_optimizer = EmBatchOptimizer(
     bayesian_network=network,
