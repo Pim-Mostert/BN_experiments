@@ -29,10 +29,5 @@ dag = create_experiment_dag(
             type="number",
             description="Normalization factor of MNIST data",
         ),
-        "TRUE_MEANS_NOISE": Param(
-            default=0.2,
-            type="number",
-            description="Proportion of noise in true means initialization",
-        ),
     },
 )
