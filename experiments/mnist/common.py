@@ -12,8 +12,8 @@ class MnistEvidenceBatches(IEvidenceBatches):
     def __init__(
         self,
         torch_settings: TorchSettings,
-        gamma: float,
         batch_size,
+        gamma: float,
     ):
         self.torch_settings = torch_settings
         self.gamma = gamma
