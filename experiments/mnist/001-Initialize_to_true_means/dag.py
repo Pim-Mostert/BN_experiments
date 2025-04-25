@@ -1,9 +1,7 @@
-from dataclasses import asdict
 from pathlib import Path
 from airflow.models.param import Param
 from dags_common import create_experiment_dag
 from bayesian_network.common.torch_settings import TorchSettings
-from bayesian_network.optimizers.em_batch_optimizer import EmBatchOptimizerSettings
 
 experiment_id = Path(__file__).parents[0].stem
 notebook_path = Path(__file__).parents[0] / f"{experiment_id}.py"
@@ -17,12 +15,23 @@ dag = create_experiment_dag(
             type="object",
         ),
         "BATCH_SIZE": Param(
-            default=50,
-            type="integer",
+            default=[100, 1000],
+            type="array",
+            items={"type": "integer"},
         ),
-        "EM_BATCH_OPTIMIZER_SETTINGS": Param(
-            default=asdict(EmBatchOptimizerSettings(num_iterations=100, learning_rate=0.01)),
-            type="object",
+        "LEARNING_RATE": Param(
+            default=[0.01, 0.1],
+            type="array",
+            items={"type": "number"},
+        ),
+        "TRUE_MEANS_NOISE": Param(
+            default=[0.1, 0.5],
+            type="array",
+            items={"type": "number"},
+        ),
+        "NUM_ITERATIONS": Param(
+            default=200,
+            type="integer",
         ),
         "GAMMA": Param(
             default=0.001,
