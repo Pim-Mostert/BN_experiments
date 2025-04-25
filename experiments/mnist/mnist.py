@@ -21,7 +21,7 @@ from bayesian_network.optimizers.em_batch_optimizer import (
 
 import logging
 
-from experiments.mnist.evidence_batches import MnistEvidenceBatches
+from experiments.mnist.common import MnistEvidenceBatches
 
 logging.basicConfig(level=logging.INFO)
 

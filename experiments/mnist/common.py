@@ -1,17 +1,19 @@
+import mlflow
 import torch
-from torch.utils.data import DataLoader
 import torchvision
-from torchvision import transforms
-from bayesian_network.inference_machines.evidence import Evidence, IEvidenceBatches
 from bayesian_network.common.torch_settings import TorchSettings
+from bayesian_network.inference_machines.evidence import Evidence, IEvidenceBatches
+from bayesian_network.optimizers.common import OptimizerLogger
+from torch.utils.data import DataLoader
+from torchvision import transforms
 
 
 class MnistEvidenceBatches(IEvidenceBatches):
     def __init__(
         self,
         torch_settings: TorchSettings,
-        gamma: float,
         batch_size,
+        gamma: float,
     ):
         self.torch_settings = torch_settings
         self.gamma = gamma
@@ -48,3 +50,17 @@ class MnistEvidenceBatches(IEvidenceBatches):
         )
 
         return evidence
+
+
+class MLflowOptimizerLogger(OptimizerLogger):
+    def log_iteration(self, iteration: int, ll: float):
+        super().log_iteration(iteration, ll)
+
+        log = self._logs[iteration]
+
+        mlflow.log_metric(
+            key="ll",
+            value=log.ll,
+            step=iteration,
+            timestamp=int(log.ts.timestamp()),
+        )
