@@ -31,6 +31,10 @@ TORCH_SETTINGS = TorchSettings(
     dtype="float64",
 )
 
+BATCH_SIZE = [100, 1000]
+LEARNING_RATE = [0.01, 0.1]
+TRUE_MEANS_NOISE = [0.1, 0.5]
+
 NUM_ITERATIONS = 200
 GAMMA = 0.001
 
@@ -151,35 +155,34 @@ def fit_network(
 
 # %% Experiments
 
-BATCH_SIZE = [100, 1000]
-LEARNING_RATE = [0.01, 0.1]
-TRUE_MEANS_NOISE = [0.1, 0.5]
 
 configs: List[SimpleNamespace] = []
 for batch_size in BATCH_SIZE:
     for learning_rate in LEARNING_RATE:
-        # for true_means_noise in TRUE_MEANS_NOISE:
-        # HIER WAS IK GEBLEVEN
-        config = SimpleNamespace()
-        config.batch_size = batch_size
-        config.learning_rate = learning_rate
+        for true_means_noise in TRUE_MEANS_NOISE:
+            config = SimpleNamespace()
+            config.batch_size = batch_size
+            config.learning_rate = learning_rate
+            config.true_means_noise = true_means_noise
 
-        configs.append(config)
+            configs.append(config)
 
-for config in configs:
+for i, config in enumerate(configs):
     with mlflow.start_run(
-        run_name=str(config),
+        run_name=str(i),
         nested=True,
     ):
+        logging.info(f"Starting run {i}/{len(configs)}, config: {config}")
+
         mlflow.log_params(vars(config))
 
-        network, observed_nodes = create_network(TRUE_MEANS_NOISE)
+        network, observed_nodes = create_network(config.true_means_noise)
 
         batches = create_batches(config.batch_size, GAMMA)
         width, height = batches.mnist_dimensions
 
         em_batch_optimizer_settings = EmBatchOptimizerSettings(
-            num_iterations=20,
+            num_iterations=NUM_ITERATIONS,
             learning_rate=config.learning_rate,
         )
 
@@ -204,7 +207,10 @@ for config in configs:
         mlflow.log_figure(figure, "means.png")
 
         # Plot log_likelihood
-        plt.figure()
+        figure = plt.figure()
         plt.xlabel("Iteration")
         plt.ylabel("Average log-likelihood")
         plt.plot(logger.get_log_likelihood())
+        mlflow.log_figure(figure, "avg_ll.png")
+
+        logging.info(f"Finished run {i}/{len(configs)}")
