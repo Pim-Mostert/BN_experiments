@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from pathlib import Path
 from airflow.models.param import Param
-from dags_common import create_experiment_dag
+from dags_common.experiment import create_experiment_dag
 from bayesian_network.common.torch_settings import TorchSettings
 from bayesian_network.optimizers.em_batch_optimizer import EmBatchOptimizerSettings
 
