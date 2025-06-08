@@ -1,21 +1,21 @@
 from pathlib import Path
 from airflow.models.param import Param
-from dags_common import create_experiment_dag
+from dags_common.experiment import create_batch_dag
 from bayesian_network.common.torch_settings import TorchSettings
 
-experiment_id = Path(__file__).parents[0].stem
-notebook_path = Path(__file__).parents[0] / f"{experiment_id}.py"
+experiment_id = "001-Initialize_to_true_means"
+notebook_path = Path(__file__).parents[0] / "001-Initialize_to_true_means.py"
 
-dag = create_experiment_dag(
+dag = create_batch_dag(
     experiment_id,
     notebook_path,
-    experiment_params={
+    batch_params={
         "TORCH_SETTINGS": Param(
-            default=dict(TorchSettings(device="cpu", dtype="float64")),
-            type="object",
+            default=[dict(TorchSettings(device="cpu", dtype="float64"))],
+            type="array",
         ),
         "BATCH_SIZE": Param(
-            default=[100, 1000],
+            default=[100],
             type="array",
             items={"type": "integer"},
         ),
@@ -30,12 +30,14 @@ dag = create_experiment_dag(
             items={"type": "number"},
         ),
         "NUM_ITERATIONS": Param(
-            default=200,
-            type="integer",
+            default=[200],
+            type="array",
+            items={"type": "integer"},
         ),
         "GAMMA": Param(
-            default=0.001,
-            type="number",
+            default=[0.001],
+            type="array",
+            items={"type": "number"},
             description="Normalization factor of MNIST data",
         ),
     },

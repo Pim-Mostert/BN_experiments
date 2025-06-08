@@ -1,6 +1,5 @@
 # %% Imports
 import logging
-from types import SimpleNamespace
 from typing import Iterable, List, Tuple
 
 import matplotlib.pyplot as plt
@@ -31,9 +30,10 @@ TORCH_SETTINGS = TorchSettings(
     dtype="float64",
 )
 
-BATCH_SIZE = [100, 1000]
-LEARNING_RATE = [0.01, 0.1]
-TRUE_MEANS_NOISE = [0.1, 0.5]
+BATCH_SIZE = 100
+LEARNING_RATE = 0.1
+
+TRUE_MEANS_NOISE = 0
 
 NUM_ITERATIONS = 200
 GAMMA = 0.001
@@ -54,11 +54,15 @@ mu_true = torch.stack(
     dim=2,
 )
 
+# Normalize according to GAMMA
+mu_true = mu_true * (1 - GAMMA) + GAMMA / 2
+
 # %% Plot means
 
 
 def plot_means(mu: Iterable[torch.Tensor]) -> Figure:
     figure = plt.figure()
+    figure.suptitle("True means")
     for i, m in enumerate(mu):
         plt.subplot(4, 3, i + 1)
         plt.imshow(m)
@@ -153,64 +157,42 @@ def fit_network(
     return network, logger
 
 
-# %% Experiments
+# %% Experiment
 
 
-configs: List[SimpleNamespace] = []
-for batch_size in BATCH_SIZE:
-    for learning_rate in LEARNING_RATE:
-        for true_means_noise in TRUE_MEANS_NOISE:
-            config = SimpleNamespace()
-            config.batch_size = batch_size
-            config.learning_rate = learning_rate
-            config.true_means_noise = true_means_noise
+network, observed_nodes = create_network(TRUE_MEANS_NOISE)
 
-            configs.append(config)
+batches = create_batches(BATCH_SIZE, GAMMA)
+width, height = batches.mnist_dimensions
 
-for i, config in enumerate(configs):
-    with mlflow.start_run(
-        run_name=str(i),
-        nested=True,
-    ):
-        logging.info(f"Starting run {i}/{len(configs)}, config: {config}")
+em_batch_optimizer_settings = EmBatchOptimizerSettings(
+    num_iterations=NUM_ITERATIONS,
+    learning_rate=LEARNING_RATE,
+)
 
-        mlflow.log_params(vars(config))
+network, logger = fit_network(
+    network,
+    observed_nodes,
+    batches,
+    em_batch_optimizer_settings,
+)
 
-        network, observed_nodes = create_network(config.true_means_noise)
+mlflow.log_metric("Log-likelihood", logger.get_log_likelihood()[-1])
 
-        batches = create_batches(config.batch_size, GAMMA)
-        width, height = batches.mnist_dimensions
+# Plot means
+w = (
+    torch.stack([y.cpt.cpu()[:, 1] for y in observed_nodes])
+    .reshape(width, height, 10)
+    .permute([2, 0, 1])
+)
 
-        em_batch_optimizer_settings = EmBatchOptimizerSettings(
-            num_iterations=NUM_ITERATIONS,
-            learning_rate=config.learning_rate,
-        )
+figure = plot_means(w)
+figure.suptitle("Means")
+mlflow.log_figure(figure, "means.png")
 
-        network, logger = fit_network(
-            network,
-            observed_nodes,
-            batches,
-            em_batch_optimizer_settings,
-        )
-
-        mlflow.log_metric("Log-likelihood", logger.get_log_likelihood()[-1])
-
-        # Plot means
-        w = (
-            torch.stack([y.cpt.cpu()[:, 1] for y in observed_nodes])
-            .reshape(width, height, 10)
-            .permute([2, 0, 1])
-        )
-
-        figure = plot_means(w)
-        figure.suptitle("Means")
-        mlflow.log_figure(figure, "means.png")
-
-        # Plot log_likelihood
-        figure = plt.figure()
-        plt.xlabel("Iteration")
-        plt.ylabel("Average log-likelihood")
-        plt.plot(logger.get_log_likelihood())
-        mlflow.log_figure(figure, "avg_ll.png")
-
-        logging.info(f"Finished run {i}/{len(configs)}")
+# Plot log_likelihood
+figure = plt.figure()
+plt.xlabel("Iteration")
+plt.ylabel("Average log-likelihood")
+plt.plot(logger.get_log_likelihood())
+mlflow.log_figure(figure, "avg_ll.png")
