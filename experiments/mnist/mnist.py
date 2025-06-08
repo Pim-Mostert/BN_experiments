@@ -44,9 +44,9 @@ GAMMA = 0.001
 # %% Load data
 
 batches = MnistEvidenceBatches(
-    TORCH_SETTINGS,
-    GAMMA,
-    BATCH_SIZE,
+    torch_settings=TORCH_SETTINGS,
+    gamma=GAMMA,
+    batch_size=BATCH_SIZE,
 )
 
 height, width = batches.mnist_dimensions
