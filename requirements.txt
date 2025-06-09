@@ -1,5 +1,6 @@
 torchvision==0.20.1
 matplotlib==3.10.0
+seaborn==0.13.2
 
 # Private Azure Artifacts
 dags_common==0.2.2
