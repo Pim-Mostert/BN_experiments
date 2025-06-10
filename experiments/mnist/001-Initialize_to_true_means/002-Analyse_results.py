@@ -1,9 +1,15 @@
 # %% Imports
 
+from dataclasses import dataclass
 from mlflow import MlflowClient
 import pandas as pd
 import seaborn as sns
 import numpy as np
+import matplotlib.pyplot as plt
+
+# %% Configure ipykernel
+
+# %config InlineBackend.figure_format = 'svg'
 
 # %% Configure MLflow
 
@@ -50,8 +56,72 @@ data = pd.concat(dfs, ignore_index=True)
 
 # %%
 
-plot_data = data[(data["learning_rate"] == 0.01) & (data["true_means_noise"] == 0)]
 
-sns.lineplot(data=plot_data, x="step", y="ll")
+@dataclass
+class PlotDataFilter:
+    key: str
+    value: float
+
+
+def plot_ll(hue_key, filter1: PlotDataFilter, filter2: PlotDataFilter):
+    plot_data = data[(data[filter1.key] == filter1.value) & (data[filter2.key] == filter2.value)]
+
+    plt.figure(figsize=(10, 6))
+    plt.title(f"{filter1.key}: {filter1.value}, {filter2.key}: {filter2.value}")
+    sns.lineplot(data=plot_data, x="step", y="ll", hue=hue_key, palette="Spectral")
+
+
+plot_ll(
+    hue_key="batch_size",
+    filter1=PlotDataFilter(key="learning_rate", value=0.01),
+    filter2=PlotDataFilter(key="true_means_noise", value=0.4),
+)
+
+plot_ll(
+    hue_key="learning_rate",
+    filter1=PlotDataFilter(key="batch_size", value=2000),
+    filter2=PlotDataFilter(key="true_means_noise", value=0.4),
+)
+
+plot_ll(
+    hue_key="learning_rate",
+    filter1=PlotDataFilter(key="batch_size", value=50),
+    filter2=PlotDataFilter(key="true_means_noise", value=0.4),
+)
+
+plot_ll(
+    hue_key="true_means_noise",
+    filter1=PlotDataFilter(key="batch_size", value=2000),
+    filter2=PlotDataFilter(key="learning_rate", value=0.01),
+)
+
+plot_ll(
+    hue_key="learning_rate",
+    filter1=PlotDataFilter(key="batch_size", value=1000),
+    filter2=PlotDataFilter(key="true_means_noise", value=1),
+)
+
+# %%
+
+filter = (
+    ((data["learning_rate"] == 0.01) | (data["learning_rate"] == 0.5))
+    & ((data["batch_size"] == 100) | (data["batch_size"] == 2000))
+    & ((data["true_means_noise"] == 0) | (data["true_means_noise"] == 0.8))
+)
+
+plot_data = data[filter].copy()
+plot_data["group"] = plot_data.apply(
+    lambda row: f"LR: {row['learning_rate']}; BS: {row['batch_size']}; TMN: {row['true_means_noise']}",
+    axis=1,
+)
+
+
+plt.figure(figsize=(10, 6))
+sns.lineplot(
+    data=plot_data,
+    x="step",
+    y="ll",
+    hue="group",
+)
 
 # %%
