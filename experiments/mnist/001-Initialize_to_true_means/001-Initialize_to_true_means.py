@@ -6,20 +6,29 @@ import matplotlib.pyplot as plt
 import mlflow
 import torch
 from matplotlib.figure import Figure
+from torch.utils.data import DataLoader
 import torchvision
 from bayesian_network.bayesian_network import BayesianNetwork, Node
 from bayesian_network.common.torch_settings import TorchSettings
+from bayesian_network.inference_machines.evidence import Evidence, EvidenceLoader
 from bayesian_network.inference_machines.spa_v3.spa_inference_machine import (
     SpaInferenceMachine,
     SpaInferenceMachineSettings,
 )
+from bayesian_network.optimizers.abstractions import IEvaluator
+from bayesian_network.optimizers.common import OptimizerLogger
+from bayesian_network.optimizers.common import (
+    BatchEvaluator,
+    EvaluatorSettings,
+)
+
 from bayesian_network.optimizers.em_batch_optimizer import (
     EmBatchOptimizer,
     EmBatchOptimizerSettings,
 )
 from torchvision import transforms
 
-from experiments.mnist.common import MLflowOptimizerLogger, MnistEvidenceBatches
+from experiments.mnist.common import MLflowOptimizerLogger
 
 logging.basicConfig(level=logging.INFO)
 
@@ -30,34 +39,53 @@ TORCH_SETTINGS = TorchSettings(
     dtype="float64",
 )
 
-BATCH_SIZE = 100
+BATCH_SIZE = 1000
 LEARNING_RATE = 0.1
 
-TRUE_MEANS_NOISE = 0
+TRUE_MEANS_NOISE = 0.2
 
-NUM_ITERATIONS = 200
-GAMMA = 0.001
+NUM_EPOCHS = 1
 
-# %% True means
+# %% Load data
 
+gamma = 0.001
 mnist = torchvision.datasets.MNIST(
     "./experiments/mnist",
     train=True,
     download=True,
-    transform=transforms.ToTensor(),
+    transform=transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.flatten()),
+            transforms.Lambda(lambda x: x * (1 - gamma) + gamma / 2),
+        ]
+    ),
 )
 
-data = (mnist.train_data / 255).to(torch.float64)
+height, width = 28, 28
+num_classes = 10
 
-mu_true = torch.stack(
-    [data[mnist.targets == i].mean(dim=0) for i in range(0, 10)],
-    dim=2,
+# %% True means
+
+data_loader = DataLoader(
+    dataset=mnist,
+    batch_size=1000,
+    shuffle=False,
 )
 
-# Normalize according to GAMMA
-mu_true = mu_true * (1 - GAMMA) + GAMMA / 2
+# To store sums and counts per class
+sums = torch.zeros(num_classes, height * width)
+counts = torch.zeros(num_classes)
 
-# %% Plot means
+# Iterate over batches
+for images, labels in data_loader:
+    for i in range(num_classes):
+        mask = labels == i
+        sums[i] += images[mask].sum(dim=0)
+        counts[i] += mask.sum()
+
+# Compute means
+mu_true = sums / counts[:, None]
 
 
 def plot_means(mu: Iterable[torch.Tensor]) -> Figure:
@@ -65,31 +93,45 @@ def plot_means(mu: Iterable[torch.Tensor]) -> Figure:
     figure.suptitle("True means")
     for i, m in enumerate(mu):
         plt.subplot(4, 3, i + 1)
-        plt.imshow(m)
+        plt.imshow(m.reshape(height, width))
         plt.colorbar()
         plt.clim(0, 1)
 
     return figure
 
 
-plot_means(mu_true.permute([2, 0, 1]))
+plot_means(mu_true)
 
 
 # %% Load data
-def create_batches(batch_size, gamma) -> MnistEvidenceBatches:
-    batches = MnistEvidenceBatches(
+def transform(batch: torch.Tensor) -> Evidence:
+    return Evidence(
+        [
+            torch.stack(
+                [
+                    1 - x,
+                    x,
+                ],
+                dim=1,
+            )
+            for x in batch.T
+        ],
         torch_settings=TORCH_SETTINGS,
-        batch_size=batch_size,
-        gamma=gamma,
     )
 
-    return batches
+
+evidence_loader = EvidenceLoader(
+    DataLoader(
+        dataset=mnist,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+    ),
+    transform=transform,
+)
 
 
 # %% Define network
 def create_network(true_means_noise) -> Tuple[BayesianNetwork, List[Node]]:
-    num_classes = 10
-
     # Create root node
     Q = Node(
         torch.ones(
@@ -102,19 +144,21 @@ def create_network(true_means_noise) -> Tuple[BayesianNetwork, List[Node]]:
     )
 
     # Create leave nodes - mu
-    height, width = mu_true.shape[0:2]
-
     noise = torch.rand(
-        (height, width, num_classes),
+        (num_classes, height * width),
         device=TORCH_SETTINGS.device,
         dtype=TORCH_SETTINGS.dtype,
     )
 
     mu = (1 - true_means_noise) * mu_true + true_means_noise * noise
-    mu = torch.stack([1 - mu, mu], dim=3)
+    mu = torch.stack([1 - mu, mu], dim=2)
 
     # Create leave nodes
-    Ys = [Node(mu[iy, ix], name=f"Y_{iy}x{ix}") for iy in range(height) for ix in range(width)]
+    Ys = [
+        Node(mu[:, iy + ix * height], name=f"Y_{iy}x{ix}")
+        for iy in range(height)
+        for ix in range(width)
+    ]
 
     # Create network
     nodes = [Q, *Ys]
@@ -132,11 +176,11 @@ def create_network(true_means_noise) -> Tuple[BayesianNetwork, List[Node]]:
 def fit_network(
     network: BayesianNetwork,
     observed_nodes: List[Node],
-    batches: MnistEvidenceBatches,
+    evidence_loader: EvidenceLoader,
+    logger: OptimizerLogger,
+    evaluator: IEvaluator,
     em_batch_optimizer_settings: EmBatchOptimizerSettings,
-) -> Tuple[BayesianNetwork, MLflowOptimizerLogger]:
-    logger = MLflowOptimizerLogger()
-
+) -> BayesianNetwork:
     em_optimizer = EmBatchOptimizer(
         bayesian_network=network,
         inference_machine_factory=lambda network: SpaInferenceMachine(
@@ -147,37 +191,62 @@ def fit_network(
             ),
             bayesian_network=network,
             observed_nodes=observed_nodes,
-            num_observations=batches.batch_size,
+            num_observations=BATCH_SIZE,
         ),
         settings=em_batch_optimizer_settings,
         logger=logger,
+        evaluator=evaluator,
     )
-    em_optimizer.optimize(batches)
+    em_optimizer.optimize(evidence_loader)
 
-    return network, logger
+    return network
 
 
 # %% Experiment
 
-
 network, observed_nodes = create_network(TRUE_MEANS_NOISE)
 
-batches = create_batches(BATCH_SIZE, GAMMA)
-width, height = batches.mnist_dimensions
-
 em_batch_optimizer_settings = EmBatchOptimizerSettings(
-    num_iterations=NUM_ITERATIONS,
     learning_rate=LEARNING_RATE,
+    num_epochs=NUM_EPOCHS,
 )
 
-network, logger = fit_network(
+logger = MLflowOptimizerLogger()
+
+evaluator_batch_size = 500
+evaluator = BatchEvaluator(
+    settings=EvaluatorSettings(
+        iteration_interval=10,
+    ),
+    inference_machine_factory=lambda network: SpaInferenceMachine(
+        settings=SpaInferenceMachineSettings(
+            torch_settings=TORCH_SETTINGS,
+            num_iterations=3,
+            average_log_likelihood=True,
+        ),
+        bayesian_network=network,
+        observed_nodes=observed_nodes,
+        num_observations=evaluator_batch_size,
+    ),
+    evidence_loader=EvidenceLoader(
+        DataLoader(
+            dataset=mnist,
+            batch_size=evaluator_batch_size,
+        ),
+        transform=transform,
+    ),
+)
+
+network = fit_network(
     network,
     observed_nodes,
-    batches,
+    evidence_loader,
+    logger,
+    evaluator,
     em_batch_optimizer_settings,
 )
 
-mlflow.log_metric("Log-likelihood", logger.get_log_likelihood()[-1])
+mlflow.log_metric("Log-likelihood", logger.log_likelihoods[1][-1])
 
 # Plot means
 w = (
@@ -194,5 +263,9 @@ mlflow.log_figure(figure, "means.png")
 figure = plt.figure()
 plt.xlabel("Iteration")
 plt.ylabel("Average log-likelihood")
-plt.plot(logger.get_log_likelihood())
+plt.plot(*logger.log_likelihoods, label="Train")
+plt.plot(*evaluator.log_likelihoods, label="Eval")
+plt.legend()
 mlflow.log_figure(figure, "avg_ll.png")
+
+# %%
