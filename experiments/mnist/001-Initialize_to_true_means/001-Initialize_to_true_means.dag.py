@@ -29,16 +29,10 @@ dag = create_batch_dag(
             type="array",
             items={"type": "number"},
         ),
-        "NUM_ITERATIONS": Param(
-            default=[200],
+        "NUM_EPOCHS": Param(
+            default=[10],
             type="array",
             items={"type": "integer"},
-        ),
-        "GAMMA": Param(
-            default=[0.001],
-            type="array",
-            items={"type": "number"},
-            description="Normalization factor of MNIST data",
         ),
     },
 )

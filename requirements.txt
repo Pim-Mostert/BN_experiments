@@ -4,4 +4,4 @@ seaborn==0.13.2
 
 # Private Azure Artifacts
 dags_common==0.2.3
-bayesian-network==0.5.0
+bayesian-network==0.6.0
