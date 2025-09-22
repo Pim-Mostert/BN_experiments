@@ -4,10 +4,10 @@ from bayesian_network.optimizers.common import OptimizerLogger, BatchEvaluator
 
 
 class MLflowOptimizerLogger(OptimizerLogger):
-    def log_iteration(self, epoch: int, iteration: int, ll: float):
+    def log(self, epoch: int, iteration: int, ll: float):
         super().log(epoch, iteration, ll)
 
-        log = self._logs[iteration]
+        log = self._logs[-1]
 
         mlflow.log_metric(
             key="ll",
