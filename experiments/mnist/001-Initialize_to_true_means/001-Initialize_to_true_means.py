@@ -17,10 +17,6 @@ from bayesian_network.inference_machines.spa_v3.spa_inference_machine import (
 )
 from bayesian_network.optimizers.abstractions import IEvaluator
 from bayesian_network.optimizers.common import OptimizerLogger
-from bayesian_network.optimizers.common import (
-    BatchEvaluator,
-    EvaluatorSettings,
-)
 
 from bayesian_network.optimizers.em_batch_optimizer import (
     EmBatchOptimizer,
@@ -28,7 +24,7 @@ from bayesian_network.optimizers.em_batch_optimizer import (
 )
 from torchvision import transforms
 
-from experiments.mnist.common import MLflowOptimizerLogger
+from experiments.mnist.common import MLflowBatchEvaluator, MLflowOptimizerLogger
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,7 +40,7 @@ LEARNING_RATE = 0.1
 
 TRUE_MEANS_NOISE = 0.2
 
-NUM_EPOCHS = 1
+NUM_EPOCHS = 2
 
 # %% Load data
 
@@ -64,6 +60,12 @@ mnist = torchvision.datasets.MNIST(
 
 height, width = 28, 28
 num_classes = 10
+
+iterations_per_epoch = len(mnist) / BATCH_SIZE
+assert int(iterations_per_epoch) == iterations_per_epoch, (
+    "len(mnist) / BATCH_SIZE should be an integer"
+)
+
 
 # %% True means
 
@@ -213,11 +215,8 @@ em_batch_optimizer_settings = EmBatchOptimizerSettings(
 
 logger = MLflowOptimizerLogger()
 
-evaluator_batch_size = 500
-evaluator = BatchEvaluator(
-    settings=EvaluatorSettings(
-        iteration_interval=10,
-    ),
+evaluator_batch_size = 2000
+evaluator = MLflowBatchEvaluator(
     inference_machine_factory=lambda network: SpaInferenceMachine(
         settings=SpaInferenceMachineSettings(
             torch_settings=TORCH_SETTINGS,
@@ -235,6 +234,11 @@ evaluator = BatchEvaluator(
         ),
         transform=transform,
     ),
+    should_evaluate=lambda epoch, iteration: (
+        (iteration == 0)
+        or (iteration == int(iterations_per_epoch / 2))
+        or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
+    ),
 )
 
 network = fit_network(
@@ -246,7 +250,8 @@ network = fit_network(
     em_batch_optimizer_settings,
 )
 
-mlflow.log_metric("Log-likelihood", logger.log_likelihoods[1][-1])
+mlflow.log_metric("Log-likelihood train", logger.logs[-1].ll)
+mlflow.log_metric("Log-likelihood eval", list(evaluator.log_likelihoods.values())[-1])
 
 # Plot means
 w = (
@@ -260,12 +265,18 @@ figure.suptitle("Means")
 mlflow.log_figure(figure, "means.png")
 
 # Plot log_likelihood
-figure = plt.figure()
-plt.xlabel("Iteration")
-plt.ylabel("Average log-likelihood")
-plt.plot(*logger.log_likelihoods, label="Train")
-plt.plot(*evaluator.log_likelihoods, label="Eval")
-plt.legend()
-mlflow.log_figure(figure, "avg_ll.png")
+train_iterations = [log.epoch * iterations_per_epoch + log.iteration for log in logger.logs]
+train_values = [log.ll for log in logger.logs]
+eval_iterations = [
+    epoch * iterations_per_epoch + iteration
+    for epoch, iteration in evaluator.log_likelihoods.keys()
+]
+eval_values = list(evaluator.log_likelihoods.values())
 
-# %%
+plt.figure()
+plt.plot(train_iterations, train_values, label="Train")
+plt.plot(eval_iterations, eval_values, label="Train")
+plt.xlabel("Iterations")
+plt.ylabel("Average log-likelihood")
+plt.legend()
+mlflow.log_figure(figure, "avg_ll_iterations.png")
