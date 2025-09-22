@@ -30,7 +30,7 @@ dag = create_batch_dag(
             items={"type": "number"},
         ),
         "NUM_EPOCHS": Param(
-            default=[10],
+            default=[5],
             type="array",
             items={"type": "integer"},
         ),
