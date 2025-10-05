@@ -231,6 +231,7 @@ spa_inference_machine_settings = SpaInferenceMachineSettings(
 
 evaluator_batch_size = 1000
 evaluator = MLflowBatchEvaluator(
+    iterations_per_epoch=iterations_per_epoch,
     inference_machine_factory=lambda network: SpaInferenceMachine(
         settings=spa_inference_machine_settings,
         bayesian_network=network,
