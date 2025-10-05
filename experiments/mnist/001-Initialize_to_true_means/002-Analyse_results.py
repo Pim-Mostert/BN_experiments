@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 
 client = MlflowClient(tracking_uri="http://localhost:9000")
 
-experiment_id = "2"
-parent_run_id = "75e6d5bb1eed4f739ef255af91f6ccc7"  # Wide search
+experiment_id = "1"
+parent_run_id = "feae9065f9804760adac53329eaf4889"  # Wide search
 
 child_runs = client.search_runs(
     experiment_ids=[experiment_id],
@@ -25,7 +25,7 @@ child_runs = client.search_runs(
 
 # %% Collect log-likelihood history per child run
 
-metric_key = "ll"
+metric_key = "ll_eval"
 
 dfs = []
 for run in child_runs:
@@ -103,13 +103,13 @@ plot_ll(
 
 # %%
 
-filter = (
-    ((data["learning_rate"] == 0.01) | (data["learning_rate"] == 0.5))
-    & ((data["batch_size"] == 100) | (data["batch_size"] == 2000))
-    & ((data["true_means_noise"] == 0) | (data["true_means_noise"] == 0.8))
-)
+# filter = (
+#     ((data["learning_rate"] == 0.01) | (data["learning_rate"] == 0.5))
+#     & ((data["batch_size"] == 100) | (data["batch_size"] == 2000))
+#     & ((data["true_means_noise"] == 0) | (data["true_means_noise"] == 0.8))
+# )
 
-plot_data = data[filter].copy()
+plot_data = data.copy()
 plot_data["group"] = plot_data.apply(
     lambda row: f"LR: {row['learning_rate']}; BS: {row['batch_size']}; TMN: {row['true_means_noise']}",
     axis=1,

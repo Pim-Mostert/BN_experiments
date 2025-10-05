@@ -1,18 +1,28 @@
+from typing import Callable
 import mlflow
 from bayesian_network.bayesian_network import BayesianNetwork
 from bayesian_network.optimizers.common import OptimizerLogger, BatchEvaluator
 
 
 class MLflowOptimizerLogger(OptimizerLogger):
+    def __init__(
+        self,
+        iterations_per_epoch: int,
+        should_log: Callable[[int, int], bool] | None = None,
+    ):
+        super().__init__(should_log)
+
+        self._iterations_per_epoch = iterations_per_epoch
+
     def log(self, epoch: int, iteration: int, ll: float):
         super().log(epoch, iteration, ll)
 
         log = self._logs[-1]
 
         mlflow.log_metric(
-            key="ll",
+            key="ll_train",
             value=log.ll,
-            step=iteration,
+            step=epoch * self._iterations_per_epoch + iteration,
             timestamp=int(log.ts.timestamp()),
         )
 

@@ -35,12 +35,24 @@ TORCH_SETTINGS = TorchSettings(
     dtype="float64",
 )
 
-BATCH_SIZE = 1000
+# TODO:
+# BIJ DEZE SETTINGS KRIJG IK EEN ll = nan VOOR DE EVALUATOR, MAAR NIET DE LOGGER (i.e. TRAINING)
+# BIJ BATCH_SIZE=2000 GEBEURT DIT NIET
+# HOE KAN DIT? EEN RELEVANT VERMOEDEN: DE EVALUATOR SET NEW EVIDENCE ZONDER INFERENCE MACHINE
+# OPNIEUW TE CREATEN. KAN SPAINFERENCEMACHINE DAARMEE OVERWEG?
+# UPDATE: DAT VERMOEDEN IS IDD HET PROBLEEM. IK WEET NOG NIET WAAROM
+# MISSCHIEN PROBEREN: PyTorch's softmax gebruiken, danwel de truc om softmax te normaliseren
+#
+# UPDATE 4 OKT. ALS HET GOED IS FIXT 0.8.0 HET PROBLEEM (HOEWEL IK HET AL NIET MEER KAN
+# REPRODUCEREN...). NU NIEUWE BN_EXPERIMENTS LADEN IN APACHE EN GEHELE EXPERIMENT NOGMAALS
+# RUNNEN. FF KIJKEN OF IK DE NANS TERUG KAN VINDEN, OM TE BEVESTIGEN DAT ZE NU NIET IDD
+# NIET MEER GEBEUREN.
+BATCH_SIZE = 100
 LEARNING_RATE = 0.1
 
-TRUE_MEANS_NOISE = 0.2
+TRUE_MEANS_NOISE = 0.1
 
-NUM_EPOCHS = 2
+NUM_EPOCHS = 5
 
 # %% Load data
 
@@ -65,7 +77,9 @@ iterations_per_epoch = len(mnist) / BATCH_SIZE
 assert int(iterations_per_epoch) == iterations_per_epoch, (
     "len(mnist) / BATCH_SIZE should be an integer"
 )
+iterations_per_epoch = int(iterations_per_epoch)
 
+mlflow.log_param("iterations_per_epoch", iterations_per_epoch)
 
 # %% True means
 
@@ -186,11 +200,7 @@ def fit_network(
     em_optimizer = EmBatchOptimizer(
         bayesian_network=network,
         inference_machine_factory=lambda network: SpaInferenceMachine(
-            settings=SpaInferenceMachineSettings(
-                torch_settings=TORCH_SETTINGS,
-                num_iterations=3,
-                average_log_likelihood=True,
-            ),
+            settings=spa_inference_machine_settings,
             bayesian_network=network,
             observed_nodes=observed_nodes,
             num_observations=BATCH_SIZE,
@@ -213,16 +223,18 @@ em_batch_optimizer_settings = EmBatchOptimizerSettings(
     num_epochs=NUM_EPOCHS,
 )
 
-logger = MLflowOptimizerLogger()
+logger = MLflowOptimizerLogger(iterations_per_epoch=iterations_per_epoch)
 
-evaluator_batch_size = 2000
+spa_inference_machine_settings = SpaInferenceMachineSettings(
+    torch_settings=TORCH_SETTINGS,
+    num_iterations=4,
+    average_log_likelihood=True,
+)
+
+evaluator_batch_size = 1000
 evaluator = MLflowBatchEvaluator(
     inference_machine_factory=lambda network: SpaInferenceMachine(
-        settings=SpaInferenceMachineSettings(
-            torch_settings=TORCH_SETTINGS,
-            num_iterations=3,
-            average_log_likelihood=True,
-        ),
+        settings=spa_inference_machine_settings,
         bayesian_network=network,
         observed_nodes=observed_nodes,
         num_observations=evaluator_batch_size,
@@ -250,9 +262,6 @@ network = fit_network(
     em_batch_optimizer_settings,
 )
 
-mlflow.log_metric("Log-likelihood train", logger.logs[-1].ll)
-mlflow.log_metric("Log-likelihood eval", list(evaluator.log_likelihoods.values())[-1])
-
 # Plot means
 w = (
     torch.stack([y.cpt.cpu()[:, 1] for y in observed_nodes])
@@ -275,7 +284,7 @@ eval_values = list(evaluator.log_likelihoods.values())
 
 plt.figure()
 plt.plot(train_iterations, train_values, label="Train")
-plt.plot(eval_iterations, eval_values, label="Train")
+plt.plot(eval_iterations, eval_values, label="Eval")
 plt.xlabel("Iterations")
 plt.ylabel("Average log-likelihood")
 plt.legend()
