@@ -79,8 +79,6 @@ assert int(iterations_per_epoch) == iterations_per_epoch, (
 )
 iterations_per_epoch = int(iterations_per_epoch)
 
-mlflow.log_param("iterations_per_epoch", iterations_per_epoch)
-
 # %% True means
 
 data_loader = DataLoader(
