@@ -1,22 +1,17 @@
 # %% Imports
 
-from dataclasses import dataclass
 from mlflow import MlflowClient
 import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 
-# %% Configure ipykernel
-
-# %config InlineBackend.figure_format = 'svg'
-
 # %% Configure MLflow
 
 client = MlflowClient(tracking_uri="http://localhost:9000")
 
 experiment_id = "1"
-parent_run_id = "feae9065f9804760adac53329eaf4889"  # Wide search
+parent_run_id = "c31ed399867b47c79b943110d29faee5"
 
 child_runs = client.search_runs(
     experiment_ids=[experiment_id],
@@ -25,103 +20,86 @@ child_runs = client.search_runs(
 
 # %% Collect log-likelihood history per child run
 
-metric_key = "ll_eval"
-
 dfs = []
 for run in child_runs:
-    history = client.get_metric_history(run.info.run_id, metric_key)
+    train_metrics = client.get_metric_history(run.info.run_id, "ll_train")
+    eval_metrics = client.get_metric_history(run.info.run_id, "ll_eval")
 
     df = pd.DataFrame(
-        [
-            (h.step, h.value)
-            for h in sorted(
-                history,
-                key=lambda x: x.step,
-            )
-        ],
+        [(h.step, h.value) for h in sorted(train_metrics, key=lambda x: x.step)],
         columns=["step", "ll"],
     )
+    df["mode"] = "train"
+
+    df_eval = pd.DataFrame(
+        [(h.step, h.value) for h in sorted(eval_metrics, key=lambda x: x.step)],
+        columns=["step", "ll"],
+    )
+    df_eval["mode"] = "eval"
+
+    df = pd.concat([df, df_eval])
+
     df["run_id"] = run.info.run_id
     df["batch_size"] = np.float64(run.data.params["BATCH_SIZE"])
     df["learning_rate"] = np.float64(run.data.params["LEARNING_RATE"])
     df["true_means_noise"] = np.float64(run.data.params["TRUE_MEANS_NOISE"])
 
     df = df.reindex(
-        columns=["run_id", "batch_size", "learning_rate", "true_means_noise", "step", "ll"]
+        columns=[
+            "run_id",
+            "batch_size",
+            "learning_rate",
+            "true_means_noise",
+            "mode",
+            "step",
+            "ll",
+        ]
     )
 
     dfs.append(df)
 
 data = pd.concat(dfs, ignore_index=True)
 
-# %%
-
-
-@dataclass
-class PlotDataFilter:
-    key: str
-    value: float
-
-
-def plot_ll(hue_key, filter1: PlotDataFilter, filter2: PlotDataFilter):
-    plot_data = data[(data[filter1.key] == filter1.value) & (data[filter2.key] == filter2.value)]
-
-    plt.figure(figsize=(10, 6))
-    plt.title(f"{filter1.key}: {filter1.value}, {filter2.key}: {filter2.value}")
-    sns.lineplot(data=plot_data, x="step", y="ll", hue=hue_key, palette="Spectral")
-
-
-plot_ll(
-    hue_key="batch_size",
-    filter1=PlotDataFilter(key="learning_rate", value=0.01),
-    filter2=PlotDataFilter(key="true_means_noise", value=0.4),
-)
-
-plot_ll(
-    hue_key="learning_rate",
-    filter1=PlotDataFilter(key="batch_size", value=2000),
-    filter2=PlotDataFilter(key="true_means_noise", value=0.4),
-)
-
-plot_ll(
-    hue_key="learning_rate",
-    filter1=PlotDataFilter(key="batch_size", value=50),
-    filter2=PlotDataFilter(key="true_means_noise", value=0.4),
-)
-
-plot_ll(
-    hue_key="true_means_noise",
-    filter1=PlotDataFilter(key="batch_size", value=2000),
-    filter2=PlotDataFilter(key="learning_rate", value=0.01),
-)
-
-plot_ll(
-    hue_key="learning_rate",
-    filter1=PlotDataFilter(key="batch_size", value=1000),
-    filter2=PlotDataFilter(key="true_means_noise", value=1),
-)
+data["epoch"] = data["step"] / (60000 / data["batch_size"])
 
 # %%
 
-# filter = (
-#     ((data["learning_rate"] == 0.01) | (data["learning_rate"] == 0.5))
-#     & ((data["batch_size"] == 100) | (data["batch_size"] == 2000))
-#     & ((data["true_means_noise"] == 0) | (data["true_means_noise"] == 0.8))
-# )
+# fmt: off
+filter = (
+    1 
+    & (data["batch_size"] == 1000) 
+    & (data["mode"] == "eval") 
+    # & (data["epoch"] > 3)
+)
+# fmt: on
 
-plot_data = data.copy()
+plot_data = data[filter].copy()
 plot_data["group"] = plot_data.apply(
-    lambda row: f"LR: {row['learning_rate']}; BS: {row['batch_size']}; TMN: {row['true_means_noise']}",
+    lambda row: f"Mode: {row['mode']}; LR: {row['learning_rate']}; BS: {row['batch_size']}; TMN: {row['true_means_noise']}",
     axis=1,
 )
-
-
 plt.figure(figsize=(10, 6))
 sns.lineplot(
     data=plot_data,
-    x="step",
+    x="epoch",
     y="ll",
     hue="group",
 )
 
+# %%
+
+final_ll = (
+    data.sort_values("step").groupby(["batch_size", "learning_rate", "true_means_noise"]).last()
+)
+
+g = sns.catplot(
+    final_ll,
+    x="true_means_noise",
+    y="ll",
+    hue="learning_rate",
+    col="batch_size",
+    kind="bar",
+)
+
+g.set(ylim=(-162, -140))
 # %%
