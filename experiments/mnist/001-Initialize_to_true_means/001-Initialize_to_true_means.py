@@ -34,29 +34,17 @@ TORCH_SETTINGS = TorchSettings(
     device="cpu",
     dtype="float64",
 )
-
-# TODO:
-# BIJ DEZE SETTINGS KRIJG IK EEN ll = nan VOOR DE EVALUATOR, MAAR NIET DE LOGGER (i.e. TRAINING)
-# BIJ BATCH_SIZE=2000 GEBEURT DIT NIET
-# HOE KAN DIT? EEN RELEVANT VERMOEDEN: DE EVALUATOR SET NEW EVIDENCE ZONDER INFERENCE MACHINE
-# OPNIEUW TE CREATEN. KAN SPAINFERENCEMACHINE DAARMEE OVERWEG?
-# UPDATE: DAT VERMOEDEN IS IDD HET PROBLEEM. IK WEET NOG NIET WAAROM
-# MISSCHIEN PROBEREN: PyTorch's softmax gebruiken, danwel de truc om softmax te normaliseren
-#
-# UPDATE 4 OKT. ALS HET GOED IS FIXT 0.8.0 HET PROBLEEM (HOEWEL IK HET AL NIET MEER KAN
-# REPRODUCEREN...). NU NIEUWE BN_EXPERIMENTS LADEN IN APACHE EN GEHELE EXPERIMENT NOGMAALS
-# RUNNEN. FF KIJKEN OF IK DE NANS TERUG KAN VINDEN, OM TE BEVESTIGEN DAT ZE NU NIET IDD
-# NIET MEER GEBEUREN.
 BATCH_SIZE = 100
 LEARNING_RATE = 0.1
 
 TRUE_MEANS_NOISE = 0.1
 
+REGULARIZATION = 0.01
+
 NUM_EPOCHS = 5
 
 # %% Load data
 
-gamma = 0.001
 mnist = torchvision.datasets.MNIST(
     "./experiments/mnist",
     train=True,
@@ -65,7 +53,6 @@ mnist = torchvision.datasets.MNIST(
         [
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.flatten()),
-            transforms.Lambda(lambda x: x * (1 - gamma) + gamma / 2),
         ]
     ),
 )
@@ -219,6 +206,7 @@ network, observed_nodes = create_network(TRUE_MEANS_NOISE)
 em_batch_optimizer_settings = EmBatchOptimizerSettings(
     learning_rate=LEARNING_RATE,
     num_epochs=NUM_EPOCHS,
+    regularization=REGULARIZATION,
 )
 
 logger = MLflowOptimizerLogger(iterations_per_epoch=iterations_per_epoch)

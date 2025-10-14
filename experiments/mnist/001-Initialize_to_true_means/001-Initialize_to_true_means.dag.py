@@ -29,6 +29,11 @@ dag = create_batch_dag(
             type="array",
             items={"type": "number"},
         ),
+        "REGULARIZATION": Param(
+            default=[0.01, 0.05],
+            type="array",
+            items={"type": "number"},
+        ),
         "NUM_EPOCHS": Param(
             default=[5],
             type="array",
