@@ -45,6 +45,7 @@ NUM_EPOCHS = 5
 
 # %% Load data
 
+gamma = 0.001
 mnist = torchvision.datasets.MNIST(
     "./experiments/mnist",
     train=True,
@@ -53,6 +54,7 @@ mnist = torchvision.datasets.MNIST(
         [
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.flatten()),
+            transforms.Lambda(lambda x: x * (1 - gamma) + gamma / 2),
         ]
     ),
 )
