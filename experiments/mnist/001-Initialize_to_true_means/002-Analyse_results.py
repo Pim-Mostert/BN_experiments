@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 client = MlflowClient(tracking_uri="http://localhost:9000")
 
 experiment_id = "1"
-parent_run_id = "c31ed399867b47c79b943110d29faee5"
+parent_run_id = "7c1031f9af404a4ab23bd48b546deb64"
 
 child_runs = client.search_runs(
     experiment_ids=[experiment_id],
@@ -43,6 +43,7 @@ for run in child_runs:
     df["batch_size"] = np.float64(run.data.params["BATCH_SIZE"])
     df["learning_rate"] = np.float64(run.data.params["LEARNING_RATE"])
     df["true_means_noise"] = np.float64(run.data.params["TRUE_MEANS_NOISE"])
+    df["regularization"] = np.float64(run.data.params["REGULARIZATION"])
 
     df = df.reindex(
         columns=[
@@ -50,6 +51,7 @@ for run in child_runs:
             "batch_size",
             "learning_rate",
             "true_means_noise",
+            "regularization",
             "mode",
             "step",
             "ll",
@@ -67,7 +69,10 @@ data["epoch"] = data["step"] / (60000 / data["batch_size"])
 # fmt: off
 filter = (
     1 
-    & (data["batch_size"] == 1000) 
+    # & (data["batch_size"] == 100) 
+    # & (data["learning_rate"] == 0.02) 
+    & (data["true_means_noise"] == 1) 
+    & (data["regularization"] == 0.01) 
     & (data["mode"] == "eval") 
     # & (data["epoch"] > 3)
 )
@@ -75,7 +80,7 @@ filter = (
 
 plot_data = data[filter].copy()
 plot_data["group"] = plot_data.apply(
-    lambda row: f"Mode: {row['mode']}; LR: {row['learning_rate']}; BS: {row['batch_size']}; TMN: {row['true_means_noise']}",
+    lambda row: f"Mode: {row['mode']}; LR: {row['learning_rate']}; BS: {row['batch_size']}; TMN: {row['true_means_noise']}, REG: {row['regularization']}",
     axis=1,
 )
 plt.figure(figsize=(10, 6))
@@ -89,17 +94,21 @@ sns.lineplot(
 # %%
 
 final_ll = (
-    data.sort_values("step").groupby(["batch_size", "learning_rate", "true_means_noise"]).last()
+    data[(data["mode"] == "eval") & (data["true_means_noise"] == 0)]
+    .sort_values("step")
+    .groupby(["batch_size", "learning_rate", "regularization"])
+    .last()
 )
 
 g = sns.catplot(
     final_ll,
-    x="true_means_noise",
+    x="regularization",
     y="ll",
     hue="learning_rate",
     col="batch_size",
     kind="bar",
 )
 
-g.set(ylim=(-162, -140))
+g.set(ylim=(-175, -140))
+
 # %%
