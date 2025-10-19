@@ -46,10 +46,10 @@ TORCH_SETTINGS = TorchSettings(
 #     dtype="float32",
 # )
 
-BATCH_SIZE = 100
+BATCH_SIZE = 1000
 LEARNING_RATE = 0.1
 REGULARIZATION = 0.001
-NUM_EPOCHS = 1
+NUM_EPOCHS = 2
 
 mlflow.log_param("TORCH_SETTINGS", TORCH_SETTINGS)
 mlflow.log_param("BATCH_SIZE", BATCH_SIZE)
