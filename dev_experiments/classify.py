@@ -6,7 +6,7 @@ import logging
 import torch
 from torch import nn
 from torch import optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import torchvision
 from torchvision import transforms
 from bayesian_network.common.torch_settings import TorchSettings
@@ -40,8 +40,11 @@ transforms = transforms.Compose(
 )
 
 mnist_train = DataLoader(
-    dataset=torchvision.datasets.MNIST(
-        "./experiments/mnist", train=True, download=True, transform=transforms
+    dataset=Subset(
+        torchvision.datasets.MNIST(
+            "./experiments/mnist", train=True, download=True, transform=transforms
+        ),
+        indices=range(10000),
     ),
     batch_size=BATCH_SIZE,
     shuffle=True,
@@ -90,7 +93,7 @@ for epoch in range(EPOCHS):
         optimizer.step()
         total_loss += loss.item()
 
-    print(f"Epoch [{epoch + 1}/{EPOCHS}], Loss: {total_loss / len(mnist_train):.4f}")
+    print(f"Epoch [{epoch + 1}/{EPOCHS}], Loss: {total_loss:.4f}")
 
 # %% Evaluation
 

@@ -1,7 +1,6 @@
 # %% Imports
 
 import logging
-from pathlib import Path
 from typing import List
 
 
@@ -25,15 +24,15 @@ from bayesian_network.optimizers.em_batch_optimizer import (
 from torchvision import transforms
 
 from experiments.mnist.logistic_regression_evaluator import (
-    CompositeEvaluator,
     LogisticRegressionEvaluator,
     LogisticRegressionEvaluatorSettings,
 )
 from experiments.mnist.common import (
-    MLflowBatchEvaluator,
     MLflowOptimizerLogger,
 )
 
+IT SEEMS IM STILL GETTING EXCESSIVE READS. THE CHUNK CACHING DOESNT WORK?
+ALSO, TRAIN LOSS APPEARED TO INCREASE WITH EVERY EPOCH. THIS SHOULD BE FIXED NOW
 logging.basicConfig(
     level=logging.INFO,
     format="[%(levelname)s][%(asctime)s][%(module)s.%(funcName)s] %(message)s",
@@ -43,8 +42,8 @@ torch.set_printoptions(sci_mode=False)
 
 # %% tags=["parameters"]
 
-NUM_CLASSES = 20
-NUM_FEATURES = 20
+NUM_CLASSES = 5
+NUM_FEATURES = 10
 
 
 # %% PARAMETERS
@@ -59,7 +58,7 @@ TORCH_SETTINGS = TorchSettings(
 #     dtype="float32",
 # )
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 200
 LEARNING_RATE = 0.1
 REGULARIZATION = 0.001
 NUM_EPOCHS = 1
@@ -87,7 +86,7 @@ transforms = transforms.Compose(
 mnist = torchvision.datasets.MNIST(
     "./experiments/mnist", train=True, download=True, transform=transforms
 )
-mnist = Subset(mnist, indices=range(3000))
+mnist = Subset(mnist, indices=range(10000))
 
 mnist_test = torchvision.datasets.MNIST(
     "./experiments/mnist", train=False, download=True, transform=transforms
@@ -185,78 +184,57 @@ def create_inference_machine_factory(num_observations):
     return inference_machine_factory
 
 
-evaluator_batch_size = 2000
-batch_evaluator = MLflowBatchEvaluator(
-    iterations_per_epoch=iterations_per_epoch,
-    inference_machine_factory=create_inference_machine_factory(evaluator_batch_size),
-    evidence_loader=EvidenceLoader(
-        DataLoader(
-            dataset=mnist,
-            batch_size=evaluator_batch_size,
-        ),
-        transform=transform,
-    ),
-    should_evaluate=lambda epoch, iteration: (
-        (iteration == 0)
-        or (iteration == int(iterations_per_epoch / 2))
-        or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
-    ),
-)
+# evaluator_batch_size = 2000
+# batch_evaluator = MLflowBatchEvaluator(
+#     iterations_per_epoch=iterations_per_epoch,
+#     inference_machine_factory=create_inference_machine_factory(evaluator_batch_size),
+#     evidence_loader=EvidenceLoader(
+#         DataLoader(
+#             dataset=mnist,
+#             batch_size=evaluator_batch_size,
+#         ),
+#         transform=transform,
+#     ),
+#     should_evaluate=lambda epoch, iteration: (
+#         (iteration == 0)
+#         or (iteration == int(iterations_per_epoch / 2))
+#         or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
+#     ),
+# )
 
 
-logistic_regression_evaluator_batch_size = 1000
 logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
     should_evaluate=lambda epoch, iteration: (
-        (iteration == 0)
-        or (iteration == int(iterations_per_epoch / 2))
-        or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
+        # (iteration == 0)
+        # or (iteration == int(iterations_per_epoch / 2))
+        epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1)
     ),
     epochs=10,
     learning_rate=0.01,
     feature_nodes=list(Fs.values()),
-    iterations_per_epoch=iterations_per_epoch,
-    height=height,
-    width=width,
     num_classes=num_classes,
     torch_settings=TORCH_SETTINGS,
+    train_batch_size=64,
+    test_batch_size=1000,
 )
 
+batch_size = 1000
 logistic_regression_evaluator = LogisticRegressionEvaluator(
     inference_machine_factory=create_inference_machine_factory(
-        logistic_regression_evaluator_batch_size
+        batch_size,
     ),
+    evidence_loader_factory=lambda dataset: EvidenceLoader(
+        data_loader=DataLoader(
+            dataset=dataset,
+            batch_size=batch_size,
+            shuffle=False,
+        ),
+        transform=transform,
+    ),
+    mnist_train=mnist,
+    mnist_test=mnist_test,
     settings=logistic_regression_evaluator_settings,
-    train_loader=DataLoader(
-        mnist,
-        batch_size=logistic_regression_evaluator_batch_size,
-        shuffle=True,
-    ),
-    test_loader=DataLoader(
-        mnist,
-        batch_size=1000,
-        shuffle=True,
-    ),
-    transform=transform,
 )
-
-evaluator = CompositeEvaluator(
-    [
-        # batch_evaluator,
-        logistic_regression_evaluator,
-    ],
-)
-
-# %% SCRATCH
-
-hoi = LogisticRegressionEvaluator.FeatureDataset.create(
-    evidence_loader=evidence_loader,
-    cache_path=Path("./cache"),
-    cache_maxsize=2,
-    feature_nodes=list(Fs.values()),
-    inference_machine_factory=create_inference_machine_factory(BATCH_SIZE),
-    network=network,
-)
-
 
 # %% Run experiment
 
@@ -265,7 +243,7 @@ em_optimizer = EmBatchOptimizer(
     inference_machine_factory=create_inference_machine_factory(BATCH_SIZE),
     settings=em_batch_optimizer_settings,
     logger=logger,
-    evaluator=evaluator,
+    evaluator=logistic_regression_evaluator,
 )
 em_optimizer.optimize(evidence_loader)
 
@@ -273,15 +251,15 @@ em_optimizer.optimize(evidence_loader)
 
 train_iterations = [log.epoch * iterations_per_epoch + log.iteration for log in logger.logs]
 train_values = [log.ll for log in logger.logs]
-eval_iterations = [
-    epoch * iterations_per_epoch + iteration
-    for epoch, iteration in evaluator.log_likelihoods.keys()
-]
-eval_values = list(evaluator.log_likelihoods.values())
+# eval_iterations = [
+#     epoch * iterations_per_epoch + iteration
+#     for epoch, iteration in evaluator.log_likelihoods.keys()
+# ]
+# eval_values = list(evaluator.log_likelihoods.values())
 
 figure = plt.figure()
 plt.plot(train_iterations, train_values, label="Train")
-plt.plot(eval_iterations, eval_values, label="Eval")
+# plt.plot(eval_iterations, eval_values, label="Eval")
 plt.xlabel("Iterations")
 plt.ylabel("Average log-likelihood")
 plt.legend()
