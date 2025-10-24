@@ -197,14 +197,15 @@ class LogisticRegressionEvaluator(IEvaluator):
             train_loader = DataLoader(
                 dataset=mnist_enriched,
                 batch_size=self._settings.train_batch_size,
-                shuffle=True,
+                shuffle=False,
             )
 
             # %% Training loop
+            total_loss = 0
             for epoch in range(self._settings.epochs):
                 total_loss = 0
                 model.train()
-                for i, (data, labels) in enumerate(train_loader):
+                for data, labels in train_loader:
                     labels = labels.to(self._settings.torch_settings.device)
 
                     # Train logistic regression model
@@ -215,20 +216,14 @@ class LogisticRegressionEvaluator(IEvaluator):
                     optimizer.step()
                     total_loss += loss.item()
 
-                    # logging.info(
-                    #     "Finished trainig epoch %s, batch %s",
-                    #     epoch,
-                    #     i,
-                    # )
-
                 logging.info(
-                    "Finished trainig epoch %s/%s, loss: %s",
+                    "Finished training epoch %s/%s, loss: %s",
                     epoch,
                     self._settings.epochs,
                     total_loss,
                 )
 
-        return model, total_loss  # pyright: ignore[reportPossiblyUnboundVariable]
+        return model, total_loss
 
     def _classify(self, model: LogisticRegressionModel, network: BayesianNetwork):
         evidence_loader = self._evidence_loader_factory(self._mnist_test)

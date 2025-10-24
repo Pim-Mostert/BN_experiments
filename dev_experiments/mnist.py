@@ -7,7 +7,7 @@ from typing import List
 import matplotlib.pyplot as plt
 import mlflow
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 import torchvision
 from bayesian_network.bayesian_network import Node, BayesianNetworkBuilder
 from bayesian_network.common.torch_settings import TorchSettings
@@ -31,8 +31,6 @@ from experiments.mnist.common import (
     MLflowOptimizerLogger,
 )
 
-IT SEEMS IM STILL GETTING EXCESSIVE READS. THE CHUNK CACHING DOESNT WORK?
-ALSO, TRAIN LOSS APPEARED TO INCREASE WITH EVERY EPOCH. THIS SHOULD BE FIXED NOW
 logging.basicConfig(
     level=logging.INFO,
     format="[%(levelname)s][%(asctime)s][%(module)s.%(funcName)s] %(message)s",
@@ -42,8 +40,8 @@ torch.set_printoptions(sci_mode=False)
 
 # %% tags=["parameters"]
 
-NUM_CLASSES = 5
-NUM_FEATURES = 10
+NUM_CLASSES = 10
+NUM_FEATURES = 5
 
 
 # %% PARAMETERS
@@ -58,10 +56,10 @@ TORCH_SETTINGS = TorchSettings(
 #     dtype="float32",
 # )
 
-BATCH_SIZE = 200
+BATCH_SIZE = 1000
 LEARNING_RATE = 0.1
 REGULARIZATION = 0.001
-NUM_EPOCHS = 1
+NUM_EPOCHS = 2
 
 mlflow.log_param("TORCH_SETTINGS", TORCH_SETTINGS)
 mlflow.log_param("BATCH_SIZE", BATCH_SIZE)
@@ -86,7 +84,6 @@ transforms = transforms.Compose(
 mnist = torchvision.datasets.MNIST(
     "./experiments/mnist", train=True, download=True, transform=transforms
 )
-mnist = Subset(mnist, indices=range(10000))
 
 mnist_test = torchvision.datasets.MNIST(
     "./experiments/mnist", train=False, download=True, transform=transforms
@@ -184,28 +181,9 @@ def create_inference_machine_factory(num_observations):
     return inference_machine_factory
 
 
-# evaluator_batch_size = 2000
-# batch_evaluator = MLflowBatchEvaluator(
-#     iterations_per_epoch=iterations_per_epoch,
-#     inference_machine_factory=create_inference_machine_factory(evaluator_batch_size),
-#     evidence_loader=EvidenceLoader(
-#         DataLoader(
-#             dataset=mnist,
-#             batch_size=evaluator_batch_size,
-#         ),
-#         transform=transform,
-#     ),
-#     should_evaluate=lambda epoch, iteration: (
-#         (iteration == 0)
-#         or (iteration == int(iterations_per_epoch / 2))
-#         or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
-#     ),
-# )
-
-
 logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
     should_evaluate=lambda epoch, iteration: (
-        # (iteration == 0)
+        # iteration == 0
         # or (iteration == int(iterations_per_epoch / 2))
         epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1)
     ),

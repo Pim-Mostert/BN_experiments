@@ -6,7 +6,7 @@ import logging
 import torch
 from torch import nn
 from torch import optim
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 import torchvision
 from torchvision import transforms
 from bayesian_network.common.torch_settings import TorchSettings
@@ -40,11 +40,8 @@ transforms = transforms.Compose(
 )
 
 mnist_train = DataLoader(
-    dataset=Subset(
-        torchvision.datasets.MNIST(
-            "./experiments/mnist", train=True, download=True, transform=transforms
-        ),
-        indices=range(10000),
+    dataset=torchvision.datasets.MNIST(
+        "./experiments/mnist", train=True, download=True, transform=transforms
     ),
     batch_size=BATCH_SIZE,
     shuffle=True,
