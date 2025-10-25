@@ -24,8 +24,8 @@ TORCH_SETTINGS = TorchSettings(
 )
 
 BATCH_SIZE = 64
-LEARNING_RATE = 0.01
-EPOCHS = 10
+LEARNING_RATE = 0.02
+EPOCHS = 200
 
 # %% Load data
 
