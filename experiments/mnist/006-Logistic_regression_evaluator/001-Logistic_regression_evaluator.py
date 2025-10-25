@@ -191,9 +191,7 @@ if Q_FEATURE_NODES:
 
 logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
     should_evaluate=lambda epoch, iteration: (
-        iteration == 0
-        or (iteration == int(iterations_per_epoch / 2))
-        or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
+        epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1)
     ),
     epochs=100,
     learning_rate=0.02,
@@ -201,10 +199,10 @@ logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
     num_classes=num_classes,
     torch_settings=TORCH_SETTINGS,
     train_batch_size=64,
-    test_batch_size=1000,
+    test_batch_size=2000,
 )
 
-batch_size = 1000
+batch_size = 2000
 evaluator = MLflowLogisticRegressionEvaluator(
     inference_machine_factory=create_inference_machine_factory(
         batch_size,
