@@ -199,10 +199,10 @@ logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
     num_classes=num_classes,
     torch_settings=TORCH_SETTINGS,
     train_batch_size=64,
-    test_batch_size=2000,
+    test_batch_size=1000,
 )
 
-batch_size = 2000
+batch_size = 1000
 evaluator = MLflowLogisticRegressionEvaluator(
     inference_machine_factory=create_inference_machine_factory(
         batch_size,
