@@ -23,16 +23,26 @@ from bayesian_network.optimizers.em_batch_optimizer import (
 )
 from torchvision import transforms
 
-from experiments.mnist.common import MLflowBatchEvaluator, MLflowOptimizerLogger
+from experiments.mnist.logistic_regression_evaluator import (
+    LogisticRegressionEvaluator,
+    LogisticRegressionEvaluatorSettings,
+)
+from experiments.mnist.common import (
+    MLflowOptimizerLogger,
+)
 
-logging.basicConfig(level=logging.INFO)
-
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s][%(asctime)s][%(module)s.%(funcName)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 torch.set_printoptions(sci_mode=False)
 
 # %% tags=["parameters"]
 
-NUM_CLASSES = 2
-NUM_FEATURES = 2
+NUM_CLASSES = 50
+NUM_FEATURES = 50
+
 
 # %% PARAMETERS
 
@@ -46,7 +56,7 @@ TORCH_SETTINGS = TorchSettings(
 #     dtype="float32",
 # )
 
-BATCH_SIZE = 100
+BATCH_SIZE = 200
 LEARNING_RATE = 0.1
 REGULARIZATION = 0.001
 NUM_EPOCHS = 1
@@ -57,23 +67,29 @@ mlflow.log_param("LEARNING_RATE", LEARNING_RATE)
 mlflow.log_param("REGULARIZATION", REGULARIZATION)
 mlflow.log_param("NUM_EPOCHS", NUM_EPOCHS)
 
+
 # %% Load data
 
+num_classes = 10
 height, width = 28, 28
 patch_height, patch_width = 4, 4
 
-mnist = torchvision.datasets.MNIST(
-    "./experiments/mnist",
-    train=True,
-    download=True,
-    transform=transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.flatten()),
-        ]
-    ),
+transforms = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: x.flatten()),
+    ],
 )
 
+mnist = torchvision.datasets.MNIST(
+    "./experiments/mnist", train=True, download=True, transform=transforms
+)
+# mnist = Subset(mnist, range(5000))
+
+mnist_test = torchvision.datasets.MNIST(
+    "./experiments/mnist", train=False, download=True, transform=transforms
+)
+# mnist_test = Subset(mnist_test, range(5000))
 
 iterations_per_epoch = len(mnist) / BATCH_SIZE
 assert int(iterations_per_epoch) == iterations_per_epoch, (
@@ -107,7 +123,6 @@ evidence_loader = EvidenceLoader(
     ),
     transform=transform,
 )
-
 
 # %% Define network
 
@@ -168,23 +183,32 @@ def create_inference_machine_factory(num_observations):
     return inference_machine_factory
 
 
-evaluator_batch_size = 2000
-evaluator = MLflowBatchEvaluator(
-    iterations_per_epoch=iterations_per_epoch,
-    inference_machine_factory=create_inference_machine_factory(evaluator_batch_size),
-    evidence_loader=EvidenceLoader(
-        DataLoader(
-            dataset=mnist,
-            batch_size=evaluator_batch_size,
-        ),
-        transform=transform,
-    ),
+logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
     should_evaluate=lambda epoch, iteration: (
-        (iteration == 0)
+        iteration == 0
         or (iteration == int(iterations_per_epoch / 2))
         or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
     ),
+    epochs=20,
+    learning_rate=0.02,
+    feature_nodes=list(Ys.values()) + list(Fs.values()),  # list(Fs.values()),
+    num_classes=num_classes,
+    torch_settings=TORCH_SETTINGS,
+    train_batch_size=64,
+    test_batch_size=1000,
 )
+
+batch_size = 1000
+logistic_regression_evaluator = LogisticRegressionEvaluator(
+    inference_machine_factory=create_inference_machine_factory(
+        batch_size,
+    ),
+    transform=transform,
+    mnist_train_loader=DataLoader(mnist, batch_size=batch_size, shuffle=True),
+    mnist_test_loader=DataLoader(mnist_test, batch_size=batch_size, shuffle=False),
+    settings=logistic_regression_evaluator_settings,
+)
+
 
 # %% Run experiment
 
@@ -193,23 +217,73 @@ em_optimizer = EmBatchOptimizer(
     inference_machine_factory=create_inference_machine_factory(BATCH_SIZE),
     settings=em_batch_optimizer_settings,
     logger=logger,
-    evaluator=evaluator,
+    # evaluator=logistic_regression_evaluator,
 )
 em_optimizer.optimize(evidence_loader)
+
+# %% Scratch
+
+
+def run_logistic_evaluator(feature_nodes: List[Node]):
+    logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
+        epochs=200,
+        learning_rate=0.02,
+        feature_nodes=feature_nodes,
+        num_classes=num_classes,
+        torch_settings=TORCH_SETTINGS,
+        train_batch_size=64,
+        test_batch_size=1000,
+    )
+
+    batch_size = 1000
+    evaluator = LogisticRegressionEvaluator(
+        inference_machine_factory=create_inference_machine_factory(
+            batch_size,
+        ),
+        transform=transform,
+        mnist_train_loader=DataLoader(mnist, batch_size=batch_size, shuffle=True),
+        mnist_test_loader=DataLoader(mnist_test, batch_size=batch_size, shuffle=False),
+        settings=logistic_regression_evaluator_settings,
+    )
+
+    evaluator.evaluate(0, 0, network)
+
+
+run_logistic_evaluator(list(Ys.values()))  # 92%
+run_logistic_evaluator(list(Fs.values()))  # 95%
+run_logistic_evaluator([Q])  #
+
+run_logistic_evaluator(list(Ys.values()) + list(Fs.values()) + [Q])  #
+
+
+# run_logistic_evaluator(list(Ys.values()))  # 87.34%
+# run_logistic_evaluator(list(Fs.values()))  # 88.86%
+# run_logistic_evaluator([Q])  # 66.24%
+
+# run_logistic_evaluator(list(Ys.values()) + list(Fs.values()) + [Q])  # 88.94%
+
+# run_logistic_evaluator(list(Ys.values()))  # 87%
+# run_logistic_evaluator(list(Fs.values()))  # 85%
+# run_logistic_evaluator([Q])  # 56%
+
+# run_logistic_evaluator(list(Ys.values()) + list(Fs.values()))  # 87%
+# run_logistic_evaluator(list(Fs.values()) + [Q])  # 96%
+# run_logistic_evaluator(list(Ys.values()) + list(Fs.values()) + [Q])  # 87%
+
 
 # %% Plot log_likelihood
 
 train_iterations = [log.epoch * iterations_per_epoch + log.iteration for log in logger.logs]
 train_values = [log.ll for log in logger.logs]
-eval_iterations = [
-    epoch * iterations_per_epoch + iteration
-    for epoch, iteration in evaluator.log_likelihoods.keys()
-]
-eval_values = list(evaluator.log_likelihoods.values())
+# eval_iterations = [
+#     epoch * iterations_per_epoch + iteration
+#     for epoch, iteration in evaluator.log_likelihoods.keys()
+# ]
+# eval_values = list(evaluator.log_likelihoods.values())
 
 figure = plt.figure()
 plt.plot(train_iterations, train_values, label="Train")
-plt.plot(eval_iterations, eval_values, label="Eval")
+# plt.plot(eval_iterations, eval_values, label="Eval")
 plt.xlabel("Iterations")
 plt.ylabel("Average log-likelihood")
 plt.legend()
