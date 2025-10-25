@@ -6,7 +6,7 @@ import logging
 import matplotlib.pyplot as plt
 import mlflow
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 import torchvision
 from bayesian_network.bayesian_network import Node, BayesianNetworkBuilder
 from bayesian_network.common.torch_settings import TorchSettings
@@ -88,16 +88,6 @@ mnist = torchvision.datasets.MNIST(
 mnist_test = torchvision.datasets.MNIST(
     "./experiments/mnist", train=False, download=True, transform=transforms
 )
-
-iterations_per_epoch = len(mnist) / BATCH_SIZE
-assert int(iterations_per_epoch) == iterations_per_epoch, (
-    "len(mnist) / BATCH_SIZE should be an integer"
-)
-iterations_per_epoch = int(iterations_per_epoch)
-
-# %% DELETE ME
-
-mnist = Subset(mnist, range(1000))
 
 iterations_per_epoch = len(mnist) / BATCH_SIZE
 assert int(iterations_per_epoch) == iterations_per_epoch, (
