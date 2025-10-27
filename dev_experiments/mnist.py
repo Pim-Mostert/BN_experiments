@@ -3,30 +3,26 @@
 import logging
 from typing import List
 
-
 import matplotlib.pyplot as plt
 import mlflow
 import torch
-from torch.utils.data import DataLoader
 import torchvision
-from bayesian_network.bayesian_network import Node, BayesianNetworkBuilder
+from bayesian_network.bayesian_network import Node
 from bayesian_network.common.torch_settings import TorchSettings
 from bayesian_network.inference_machines.evidence import Evidence, EvidenceLoader
 from bayesian_network.inference_machines.spa_v3.spa_inference_machine import (
     SpaInferenceMachine,
     SpaInferenceMachineSettings,
 )
-from bayesian_network.samplers.torch_sampler import TorchBayesianNetworkSampler
 from bayesian_network.optimizers.em_batch_optimizer import (
     EmBatchOptimizer,
     EmBatchOptimizerSettings,
 )
+from bayesian_network.samplers.torch_sampler import TorchBayesianNetworkSampler
+from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 
-from experiments.mnist.logistic_regression_evaluator import (
-    LogisticRegressionEvaluator,
-    LogisticRegressionEvaluatorSettings,
-)
+from dev_experiments.networks import Network4LBuilder
 from experiments.mnist.common import (
     MLflowOptimizerLogger,
 )
@@ -40,8 +36,9 @@ torch.set_printoptions(sci_mode=False)
 
 # %% tags=["parameters"]
 
-NUM_CLASSES = 50
-NUM_FEATURES = 50
+# NUM_F0 = 2
+# NUM_F1 = 5
+# NUM_F2 = 5
 
 
 # %% PARAMETERS
@@ -56,7 +53,7 @@ TORCH_SETTINGS = TorchSettings(
 #     dtype="float32",
 # )
 
-BATCH_SIZE = 200
+BATCH_SIZE = 100
 LEARNING_RATE = 0.1
 REGULARIZATION = 0.001
 NUM_EPOCHS = 1
@@ -70,9 +67,7 @@ mlflow.log_param("NUM_EPOCHS", NUM_EPOCHS)
 
 # %% Load data
 
-num_classes = 10
 height, width = 28, 28
-patch_height, patch_width = 4, 4
 
 transforms = transforms.Compose(
     [
@@ -84,12 +79,7 @@ transforms = transforms.Compose(
 mnist = torchvision.datasets.MNIST(
     "./experiments/mnist", train=True, download=True, transform=transforms
 )
-# mnist = Subset(mnist, range(5000))
-
-mnist_test = torchvision.datasets.MNIST(
-    "./experiments/mnist", train=False, download=True, transform=transforms
-)
-# mnist_test = Subset(mnist_test, range(5000))
+mnist = Subset(mnist, range(5000))
 
 iterations_per_epoch = len(mnist) / BATCH_SIZE
 assert int(iterations_per_epoch) == iterations_per_epoch, (
@@ -126,35 +116,18 @@ evidence_loader = EvidenceLoader(
 
 # %% Define network
 
-builder = BayesianNetworkBuilder()
+num_F0 = 16
+num_F1 = 8
+num_F2 = 4
+num_F3 = 2
 
-# Create root node
-Q = Node.random((NUM_CLASSES), torch_settings=TORCH_SETTINGS, name="Q")
-builder.add_node(Q)
+# network, F0, Ys = Network1LBuilder(TORCH_SETTINGS, 28, 28).build(10)
+# network, F0, F1s, Ys = Network2LBuilder(TORCH_SETTINGS, 28, 28).build(10, 10)
+# network, F0, F1s, F2s, Ys = Network3LBuilder(TORCH_SETTINGS, 28, 28).build(2, 3, 4)
+network, F0, F1s, F2s, F3s, Ys = Network4LBuilder(TORCH_SETTINGS, 28, 28).build(16, 8, 4, 5)
 
-Fs = {}
-Ys = {}
 
-for ify in range(int(height / patch_height)):
-    for ifx in range(int(width / patch_width)):
-        F = Node.random((NUM_CLASSES, NUM_FEATURES), TORCH_SETTINGS, name=f"F_{ify}x{ifx}")
-        Fs[(ify, ifx)] = F
-        builder.add_node(F, parents=Q)
-
-        for iy in range(patch_height):
-            for ix in range(patch_width):
-                index_y = ify * patch_height + iy
-                index_x = ifx * patch_width + ix
-
-                Y = Node.random((NUM_FEATURES, 2), TORCH_SETTINGS, name=f"Y_{index_y}x{index_x}")
-                Ys[(index_y, index_x)] = Y
-                builder.add_node(Y, parents=F)
-
-Ys = {i: Ys[i] for i in sorted(Ys)}
-
-# Create network
-network = builder.build()
-
+logging.info("Network degrees of freedom: %s", network.degrees_of_freedom)
 mlflow.log_metric("DoF", network.degrees_of_freedom)
 
 # %% Prepare experiment
@@ -176,38 +149,11 @@ def create_inference_machine_factory(num_observations):
                 average_log_likelihood=True,
             ),
             bayesian_network=network,
-            observed_nodes=list(Ys.values()),
+            observed_nodes=Ys,
             num_observations=num_observations,
         )
 
     return inference_machine_factory
-
-
-logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
-    should_evaluate=lambda epoch, iteration: (
-        iteration == 0
-        or (iteration == int(iterations_per_epoch / 2))
-        or (epoch == (NUM_EPOCHS - 1) and (iteration == iterations_per_epoch - 1))
-    ),
-    epochs=20,
-    learning_rate=0.02,
-    feature_nodes=list(Ys.values()) + list(Fs.values()),  # list(Fs.values()),
-    num_classes=num_classes,
-    torch_settings=TORCH_SETTINGS,
-    train_batch_size=64,
-    test_batch_size=1000,
-)
-
-batch_size = 1000
-logistic_regression_evaluator = LogisticRegressionEvaluator(
-    inference_machine_factory=create_inference_machine_factory(
-        batch_size,
-    ),
-    transform=transform,
-    mnist_train_loader=DataLoader(mnist, batch_size=batch_size, shuffle=True),
-    mnist_test_loader=DataLoader(mnist_test, batch_size=batch_size, shuffle=False),
-    settings=logistic_regression_evaluator_settings,
-)
 
 
 # %% Run experiment
@@ -217,78 +163,19 @@ em_optimizer = EmBatchOptimizer(
     inference_machine_factory=create_inference_machine_factory(BATCH_SIZE),
     settings=em_batch_optimizer_settings,
     logger=logger,
-    # evaluator=logistic_regression_evaluator,
 )
 em_optimizer.optimize(evidence_loader)
-
-# %% Scratch
-
-
-def run_logistic_evaluator(feature_nodes: List[Node]):
-    logistic_regression_evaluator_settings = LogisticRegressionEvaluatorSettings(
-        epochs=200,
-        learning_rate=0.02,
-        feature_nodes=feature_nodes,
-        num_classes=num_classes,
-        torch_settings=TORCH_SETTINGS,
-        train_batch_size=64,
-        test_batch_size=1000,
-    )
-
-    batch_size = 1000
-    evaluator = LogisticRegressionEvaluator(
-        inference_machine_factory=create_inference_machine_factory(
-            batch_size,
-        ),
-        transform=transform,
-        mnist_train_loader=DataLoader(mnist, batch_size=batch_size, shuffle=True),
-        mnist_test_loader=DataLoader(mnist_test, batch_size=batch_size, shuffle=False),
-        settings=logistic_regression_evaluator_settings,
-    )
-
-    evaluator.evaluate(0, 0, network)
-
-
-run_logistic_evaluator(list(Ys.values()))  # 92%
-run_logistic_evaluator(list(Fs.values()))  # 95%
-run_logistic_evaluator([Q])  #
-
-run_logistic_evaluator(list(Ys.values()) + list(Fs.values()) + [Q])  #
-
-
-# run_logistic_evaluator(list(Ys.values()))  # 87.34%
-# run_logistic_evaluator(list(Fs.values()))  # 88.86%
-# run_logistic_evaluator([Q])  # 66.24%
-
-# run_logistic_evaluator(list(Ys.values()) + list(Fs.values()) + [Q])  # 88.94%
-
-# run_logistic_evaluator(list(Ys.values()))  # 87%
-# run_logistic_evaluator(list(Fs.values()))  # 85%
-# run_logistic_evaluator([Q])  # 56%
-
-# run_logistic_evaluator(list(Ys.values()) + list(Fs.values()))  # 87%
-# run_logistic_evaluator(list(Fs.values()) + [Q])  # 96%
-# run_logistic_evaluator(list(Ys.values()) + list(Fs.values()) + [Q])  # 87%
-
 
 # %% Plot log_likelihood
 
 train_iterations = [log.epoch * iterations_per_epoch + log.iteration for log in logger.logs]
 train_values = [log.ll for log in logger.logs]
-# eval_iterations = [
-#     epoch * iterations_per_epoch + iteration
-#     for epoch, iteration in evaluator.log_likelihoods.keys()
-# ]
-# eval_values = list(evaluator.log_likelihoods.values())
 
 figure = plt.figure()
 plt.plot(train_iterations, train_values, label="Train")
-# plt.plot(eval_iterations, eval_values, label="Eval")
 plt.xlabel("Iterations")
 plt.ylabel("Average log-likelihood")
 plt.legend()
-
-mlflow.log_figure(figure, "avg_ll_iterations.png")
 
 # %% Plots
 
@@ -311,29 +198,15 @@ def get_reconstruction(observed_nodes: List[Node], queries: Evidence):
     )
 
     im.enter_evidence(queries)
-    y_hat = torch.stack(im.infer_single_nodes(list(Ys.values())))
+    y_hat = torch.stack(im.infer_single_nodes(Ys))
 
     return y_hat[:, :, 1].T
 
 
-# %% Plot F->Y weights
-
-wY = torch.stack([Ys[y].cpt.cpu()[:, 1] for y in Ys])
-
-
-figure = plt.figure()
-figure.suptitle("F->Y weights")
-for iF in range(NUM_FEATURES):
-    plt.subplot(int(NUM_FEATURES**0.5) + 1, int(NUM_FEATURES**0.5) + 1, iF + 1)
-    plot(wY[:, iF].reshape(height, width))
-
-
-mlflow.log_figure(figure, "F-Y_weights.png")
-
 # %% Root template
 
-queries = Evidence([Q.cpt], torch_settings=TORCH_SETTINGS)
-template = get_reconstruction([Q], queries)[0]
+queries = Evidence([F0.cpt], torch_settings=TORCH_SETTINGS)
+template = get_reconstruction([F0], queries)[0]
 
 figure = plt.figure()
 figure.suptitle("Grand mean")
@@ -342,18 +215,54 @@ plot(template.reshape(height, width))
 
 mlflow.log_figure(figure, "Templates_root.png")
 
-# %% Q templates
+# %% F0 templates
 
-queries = Evidence([torch.eye(NUM_CLASSES)], torch_settings=TORCH_SETTINGS)
-templates = get_reconstruction([Q], queries)
+queries = Evidence([torch.eye(num_F0)], torch_settings=TORCH_SETTINGS)
+templates = get_reconstruction([F0], queries)
 
 plt.figure()
 plt.suptitle("Q templates")
-for i in range(NUM_CLASSES):
-    plt.subplot(int(NUM_CLASSES**0.5) + 1, int(NUM_CLASSES**0.5) + 1, i + 1)
+for i in range(num_F0):
+    plt.subplot(int(num_F0**0.5) + 1, int(num_F0**0.5) + 1, i + 1)
     plot(templates[i].reshape(height, width))
 
-mlflow.log_figure(figure, "Templates_Q.png")
+mlflow.log_figure(figure, "Templates_F0.png")
+
+# %% F1 templates
+
+if1 = 5
+queries = Evidence([torch.eye(num_F1)], torch_settings=TORCH_SETTINGS)
+templates = get_reconstruction([F1s[if1]], queries)
+
+for j in range(0, num_F1):
+    plt.subplot(3, 4, j + 1)
+    plot(templates[j].reshape(height, width))
+
+mlflow.log_figure(figure, "Templates_F1.png")
+
+# %% F2 templates
+
+if2 = 25
+queries = Evidence([torch.eye(num_F2)], torch_settings=TORCH_SETTINGS)
+templates = get_reconstruction([F2s[if2]], queries)
+
+for j in range(0, num_F2):
+    plt.subplot(3, 4, j + 1)
+    plot(templates[j].reshape(height, width))
+
+mlflow.log_figure(figure, "Templates_F2.png")
+
+# %% F3 templates
+
+if3 = 100
+queries = Evidence([torch.eye(num_F3)], torch_settings=TORCH_SETTINGS)
+templates = get_reconstruction([F3s[if3]], queries)
+
+for j in range(0, num_F3):
+    plt.subplot(3, 4, j + 1)
+    plot(templates[j].reshape(height, width))
+
+mlflow.log_figure(figure, "Templates_F3.png")
 
 # %% Sample reconstruction
 
@@ -366,20 +275,20 @@ evidence = transform(X)
 inference_machine = create_inference_machine_factory(len(X))(network)
 inference_machine.enter_evidence(evidence)
 
-inferred = inference_machine.infer_single_nodes([Q, *Fs.values()])
-pQ = inferred[0:1]
-pFs = inferred[1:]
+inferred = inference_machine.infer_single_nodes([F0, *F1s])
+pF0 = inferred[0:1]
+pF1s = inferred[1:]
 
 ### P(Y | Q)
-y_hat_Q = get_reconstruction([Q], Evidence(pQ, TORCH_SETTINGS))
+y_hat_Q = get_reconstruction([F0], Evidence(pF0, TORCH_SETTINGS))
 
 ### P(Y | F)
-y_hat_F = get_reconstruction(list(Fs.values()), Evidence(pFs, TORCH_SETTINGS))
+y_hat_F = get_reconstruction(F1s, Evidence(pF1s, TORCH_SETTINGS))
 
 ### Plot
 figure = plt.figure(figsize=(6, 50))
 for i, x in enumerate(X):
-    pfs = [e[i][None, :] for e in pFs]
+    pfs = [e[i][None, :] for e in pF1s]
 
     # Sample
     ax1 = plt.subplot(len(X), 3, i * 3 + 1)
@@ -395,8 +304,8 @@ for i, x in enumerate(X):
 
     if i == 0:
         ax1.set_title("Sample")
-        ax2.set_title("From Q")
-        ax3.set_title("From F")
+        ax2.set_title("From F0")
+        ax3.set_title("From F1")
 
 mlflow.log_figure(figure, "Reconstructions.png")
 
@@ -404,7 +313,7 @@ mlflow.log_figure(figure, "Reconstructions.png")
 
 sampler = TorchBayesianNetworkSampler(network, TORCH_SETTINGS)
 
-data = sampler.sample(25, list(Ys.values()))
+data = sampler.sample(25, Ys)
 
 figure = plt.figure()
 for i, x in enumerate(data):
