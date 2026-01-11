@@ -22,7 +22,7 @@ from bayesian_network.samplers.torch_sampler import TorchBayesianNetworkSampler
 from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 
-from dev_experiments.networks import Network4LBuilder
+from networks import Network4LBuilder
 from experiments.mnist.common import (
     MLflowOptimizerLogger,
 )
