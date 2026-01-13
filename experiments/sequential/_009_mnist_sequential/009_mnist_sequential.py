@@ -185,7 +185,7 @@ for e in range(NUM_EPOCHS):
         im.enter_evidence(sev)
         log_likelihood = im.log_likelihood()
 
-        mlflow.log_metric("ll", log_likelihood, step=iterations_per_epoch * NUM_EPOCHS + i)
+        mlflow.log_metric("ll", log_likelihood, step=iterations_per_epoch * e + i)
         ll.append(log_likelihood)
 
         # Optimize
